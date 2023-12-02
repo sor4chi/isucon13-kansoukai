@@ -36,8 +36,9 @@ var (
 )
 
 var (
-	hashCache  = NewCache[string, [32]byte]()
-	themeCache = NewCache[string, Theme]()
+	hashCache     = NewCache[string, [32]byte]()
+	themeCache    = NewCache[string, Theme]()
+	tagModelCache = NewCache[int64, TagModel]()
 )
 
 func init() {
@@ -147,6 +148,7 @@ func createIndexQueries() []string {
 func initCaches() {
 	hashCache.Init()
 	themeCache.Init()
+	tagModelCache.Init()
 }
 
 func initializeHandler(c echo.Context) error {
@@ -169,6 +171,14 @@ func initializeHandler(c echo.Context) error {
 		}(qs)
 	}
 	wg.Wait()
+
+	var tags []TagModel
+	if err := dbConn.Select(&tags, "SELECT * FROM tags"); err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "failed to get tags: "+err.Error())
+	}
+	for _, tag := range tags {
+		tagModelCache.Set(tag.ID, tag)
+	}
 
 	c.Request().Header.Add("Content-Type", "application/json;charset=utf-8")
 	return c.JSON(http.StatusOK, InitializeResponse{

@@ -187,9 +187,12 @@ func searchLivestreamsHandler(c echo.Context) error {
 	var livestreamModels []*LivestreamModel
 	if c.QueryParam("tag") != "" {
 		// タグによる取得
-		var tagIDList []int
-		if err := dbConn.SelectContext(ctx, &tagIDList, "SELECT id FROM tags WHERE name = ?", keyTagName); err != nil {
-			return echo.NewHTTPError(http.StatusInternalServerError, "failed to get tags: "+err.Error())
+		var tagIDList []int64
+		all := tagModelCache.All()
+		for _, tagModel := range all {
+			if tagModel.Name == keyTagName {
+				tagIDList = append(tagIDList, tagModel.ID)
+			}
 		}
 
 		query, params, err := sqlx.In("SELECT * FROM livestream_tags WHERE tag_id IN (?) ORDER BY livestream_id DESC", tagIDList)
@@ -451,27 +454,20 @@ func fillLivestreamResponse(ctx context.Context, db *sqlx.DB, livestreamModel Li
 	}
 
 	tags := make([]Tag, len(livestreamTagModels))
-	tagIDs := make([]int64, len(livestreamTagModels))
+	var tagModels []TagModel
 	for i := range livestreamTagModels {
-		tagIDs[i] = livestreamTagModels[i].TagID
+		tagModel, ok := tagModelCache.Get(livestreamTagModels[i].TagID)
+		if !ok {
+			return Livestream{}, fmt.Errorf("failed to get tag: %d", livestreamTagModels[i].TagID)
+		}
+		tagModels = append(tagModels, tagModel)
 	}
 
-	if len(tagIDs) > 0 {
-		var tagModels []*TagModel
-		query, params, err := sqlx.In("SELECT * FROM tags WHERE id IN (?)", tagIDs)
-		if err != nil {
-			return Livestream{}, err
-		}
-		if err := db.SelectContext(ctx, &tagModels, query, params...); err != nil {
-			return Livestream{}, err
-		}
-
-		for i := range tagModels {
-			tagModel := tagModels[i]
-			tags[i] = Tag{
-				ID:   tagModel.ID,
-				Name: tagModel.Name,
-			}
+	for i := range tagModels {
+		tagModel := tagModels[i]
+		tags[i] = Tag{
+			ID:   tagModel.ID,
+			Name: tagModel.Name,
 		}
 	}
 
@@ -542,18 +538,14 @@ func fillLivestreamResponseBulk(ctx context.Context, db *sqlx.DB, livestreamMode
 		}
 	}
 
-	tagIDs := make([]int64, len(allLivestreamTagModels))
+	var allTagModels []TagModel
 	for i := range allLivestreamTagModels {
-		tagIDs[i] = allLivestreamTagModels[i].TagID
-	}
-
-	var allTagModels []*TagModel
-	query, params, err = sqlx.In("SELECT * FROM tags WHERE id IN (?)", tagIDs)
-	if err != nil {
-		return nil, err
-	}
-	if err := db.SelectContext(ctx, &allTagModels, query, params...); err != nil {
-		return nil, err
+		tagModel, ok := tagModelCache.Get(allLivestreamTagModels[i].TagID)
+		if !ok {
+			gErr = fmt.Errorf("failed to get tag: %d", allLivestreamTagModels[i].TagID)
+			break
+		}
+		allTagModels = append(allTagModels, tagModel)
 	}
 
 	tagsMap := make(map[int64]Tag, len(allTagModels))

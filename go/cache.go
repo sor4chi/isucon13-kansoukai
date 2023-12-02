@@ -39,3 +39,13 @@ func (c *cache[K, V]) Delete(key K) {
 	delete(c.items, key)
 	c.Unlock()
 }
+
+func (c *cache[K, V]) All() []V {
+	c.RLock()
+	values := make([]V, 0, len(c.items))
+	for _, v := range c.items {
+		values = append(values, v)
+	}
+	c.RUnlock()
+	return values
+}
