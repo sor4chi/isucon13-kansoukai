@@ -466,19 +466,41 @@ func fillLivestreamResponse(ctx context.Context, db *sqlx.DB, livestreamModel Li
 }
 
 func fillLivestreamResponseBulk(ctx context.Context, db *sqlx.DB, livestreamModels []*LivestreamModel) ([]Livestream, error) {
+	if len(livestreamModels) == 0 {
+		return []Livestream{}, nil
+	}
+
 	livestreams := make([]Livestream, len(livestreamModels))
 	var gErr error
 
+	userIDs := make([]int64, len(livestreamModels))
+	for i := range livestreamModels {
+		userIDs[i] = livestreamModels[i].UserID
+	}
+
+	var ownerModels []*UserModel
+	query, params, err := sqlx.In("SELECT * FROM users WHERE id IN (?)", userIDs)
+	if err != nil {
+		return nil, err
+	}
+	if err := db.SelectContext(ctx, &ownerModels, query, params...); err != nil {
+		return nil, err
+	}
+
+	owners := make(map[int64]User, len(ownerModels))
+	for i := range ownerModels {
+		owner, err := fillUserResponse(ctx, db, *ownerModels[i])
+		if err != nil {
+			return nil, err
+		}
+		owners[owner.ID] = owner
+	}
+
 	for i := range livestreamModels {
 		livestreamModel := livestreamModels[i]
-		ownerModel := UserModel{}
-		if err := db.GetContext(ctx, &ownerModel, "SELECT * FROM users WHERE id = ?", livestreamModel.UserID); err != nil {
-			gErr = err
-			break
-		}
-		owner, err := fillUserResponse(ctx, db, ownerModel)
-		if err != nil {
-			gErr = err
+		owner, ok := owners[livestreamModels[i].UserID]
+		if !ok {
+			gErr = fmt.Errorf("failed to get owner of livestream: %d", livestreamModels[i].UserID)
 			break
 		}
 
