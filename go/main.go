@@ -37,9 +37,8 @@ var (
 )
 
 var (
-	hashCache     = NewCache[string, [32]byte]()
-	themeCache    = NewCache[string, Theme]()
-	tagModelCache = NewCache[int64, TagModel]()
+	hashCache  = NewCache[string, [32]byte]()
+	themeCache = NewCache[string, Theme]()
 )
 
 func init() {
@@ -148,7 +147,6 @@ func createIndexQueries() []string {
 func initCaches() {
 	hashCache.Init()
 	themeCache.Init()
-	tagModelCache.Init()
 }
 
 func initializeHandler(c echo.Context) error {
