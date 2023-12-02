@@ -1327,6 +1327,8 @@ func startDNS() error {
 		return errors.New("powerdns subdomain address is not set")
 	}
 
+	println("subdomain adder", subdomainAdder)
+
 	dns.HandleFunc("u.isucon.dev.", func(w dns.ResponseWriter, r *dns.Msg) {
 		println("dns handle func", r.Question[0].Name)
 		m := new(dns.Msg)
