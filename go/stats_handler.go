@@ -7,6 +7,7 @@ import (
 	"sort"
 	"strconv"
 
+	"github.com/jmoiron/sqlx"
 	"github.com/labstack/echo/v4"
 )
 
@@ -103,9 +104,9 @@ func getUserStatisticsHandler(c echo.Context) error {
 	GROUP BY u.id
 	`
 	var entries []*struct {
-		Username    string `db:"name"`
-		Reactions   int64  `db:"reactions"`
-		TotalTips   int64  `db:"total_tips"`
+		Username  string `db:"name"`
+		Reactions int64  `db:"reactions"`
+		TotalTips int64  `db:"total_tips"`
 	}
 	if err := tx.SelectContext(ctx, &entries, query); err != nil && !errors.Is(err, sql.ErrNoRows) {
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to get users: "+err.Error())
@@ -148,16 +149,24 @@ func getUserStatisticsHandler(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to get livestreams: "+err.Error())
 	}
 
-	for _, livestream := range livestreams {
-		var livecomments []*LivecommentModel
-		if err := tx.SelectContext(ctx, &livecomments, "SELECT * FROM livecomments WHERE livestream_id = ?", livestream.ID); err != nil && !errors.Is(err, sql.ErrNoRows) {
-			return echo.NewHTTPError(http.StatusInternalServerError, "failed to get livecomments: "+err.Error())
-		}
+	livestreamIDs := make([]int64, len(livestreams))
+	for i := range livestreams {
+		livestreamIDs[i] = livestreams[i].ID
+	}
 
-		for _, livecomment := range livecomments {
-			totalTip += livecomment.Tip
-			totalLivecomments++
-		}
+	query, args, err := sqlx.In("SELECT * FROM livecomments WHERE livestream_id IN (?)", livestreamIDs)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "failed to build query: "+err.Error())
+	}
+	query = tx.Rebind(query)
+	var livecomments []*LivecommentModel
+	if err := tx.SelectContext(ctx, &livecomments, query, args...); err != nil && !errors.Is(err, sql.ErrNoRows) {
+		return echo.NewHTTPError(http.StatusInternalServerError, "failed to get livecomments: "+err.Error())
+	}
+
+	for _, livecomment := range livecomments {
+		totalTip += livecomment.Tip
+		totalLivecomments++
 	}
 
 	// 合計視聴者数
@@ -249,7 +258,6 @@ func getLivestreamStatisticsHandler(c echo.Context) error {
 		})
 	}
 	sort.Sort(ranking)
-
 
 	var rank int64 = 1
 	for i := len(ranking) - 1; i >= 0; i-- {
