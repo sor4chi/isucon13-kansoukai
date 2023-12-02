@@ -93,33 +93,31 @@ func getUserStatisticsHandler(c echo.Context) error {
 	}
 
 	var ranking UserRanking
-	for _, user := range users {
-		var reactions int64
-		query := `
-		SELECT COUNT(*) FROM users u
-		INNER JOIN livestreams l ON l.user_id = u.id
-		INNER JOIN reactions r ON r.livestream_id = l.id
-		WHERE u.id = ?`
-		if err := tx.GetContext(ctx, &reactions, query, user.ID); err != nil && !errors.Is(err, sql.ErrNoRows) {
-			return echo.NewHTTPError(http.StatusInternalServerError, "failed to count reactions: "+err.Error())
-		}
 
-		var tips int64
-		query = `
-		SELECT IFNULL(SUM(l2.tip), 0) FROM users u
-		INNER JOIN livestreams l ON l.user_id = u.id
-		INNER JOIN livecomments l2 ON l2.livestream_id = l.id
-		WHERE u.id = ?`
-		if err := tx.GetContext(ctx, &tips, query, user.ID); err != nil && !errors.Is(err, sql.ErrNoRows) {
-			return echo.NewHTTPError(http.StatusInternalServerError, "failed to count tips: "+err.Error())
-		}
+	query := `
+	SELECT u.name, COUNT(r.id) AS reactions, IFNULL(SUM(l2.tip), 0) AS total_tips
+	FROM users u
+	LEFT JOIN livestreams l ON u.id = l.user_id
+	LEFT JOIN reactions r ON l.id = r.livestream_id
+	LEFT JOIN livecomments l2 ON l.id = l2.livestream_id
+	GROUP BY u.id
+	`
+	var entries []*struct {
+		Username    string `db:"name"`
+		Reactions   int64  `db:"reactions"`
+		TotalTips   int64  `db:"total_tips"`
+	}
+	if err := tx.SelectContext(ctx, &entries, query); err != nil && !errors.Is(err, sql.ErrNoRows) {
+		return echo.NewHTTPError(http.StatusInternalServerError, "failed to get users: "+err.Error())
+	}
 
-		score := reactions + tips
+	for _, entry := range entries {
 		ranking = append(ranking, UserRankingEntry{
-			Username: user.Name,
-			Score:    score,
+			Username: entry.Username,
+			Score:    entry.Reactions + entry.TotalTips,
 		})
 	}
+
 	sort.Sort(ranking)
 
 	var rank int64 = 1
@@ -133,7 +131,7 @@ func getUserStatisticsHandler(c echo.Context) error {
 
 	// リアクション数
 	var totalReactions int64
-	query := `SELECT COUNT(*) FROM users u
+	query = `SELECT COUNT(*) FROM users u
     INNER JOIN livestreams l ON l.user_id = u.id
     INNER JOIN reactions r ON r.livestream_id = l.id
     WHERE u.name = ?
