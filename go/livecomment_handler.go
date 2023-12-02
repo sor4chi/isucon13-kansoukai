@@ -96,14 +96,9 @@ func getLivecommentsHandler(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to get livecomments: "+err.Error())
 	}
 
-	livecomments := make([]Livecomment, len(livecommentModels))
-	for i := range livecommentModels {
-		livecomment, err := fillLivecommentResponse(ctx, dbConn, livecommentModels[i])
-		if err != nil {
-			return echo.NewHTTPError(http.StatusInternalServerError, "failed to fil livecomments: "+err.Error())
-		}
-
-		livecomments[i] = livecomment
+	livecomments, err := fillLivecommentResponseBulk(ctx, dbConn, livecommentModels)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "failed to fil livecomments: "+err.Error())
 	}
 
 	return c.JSON(http.StatusOK, livecomments)
@@ -400,6 +395,51 @@ func fillLivecommentResponse(ctx context.Context, db *sqlx.DB, livecommentModel 
 	}
 
 	return livecomment, nil
+}
+
+func fillLivecommentResponseBulk(ctx context.Context, db *sqlx.DB, livecommentModels []LivecommentModel) ([]Livecomment, error) {
+	if len(livecommentModels) == 0 {
+		return []Livecomment{}, nil
+	}
+
+	commentOwners := make([]User, len(livecommentModels))
+	livestreams := make([]Livestream, len(livecommentModels))
+
+	for i := range livecommentModels {
+		commentOwnerModel := UserModel{}
+		if err := db.GetContext(ctx, &commentOwnerModel, "SELECT * FROM users WHERE id = ?", livecommentModels[i].UserID); err != nil {
+			return []Livecomment{}, err
+		}
+		commentOwner, err := fillUserResponse(ctx, db, commentOwnerModel)
+		if err != nil {
+			return []Livecomment{}, err
+		}
+		commentOwners[i] = commentOwner
+
+		livestreamModel := LivestreamModel{}
+		if err := db.GetContext(ctx, &livestreamModel, "SELECT * FROM livestreams WHERE id = ?", livecommentModels[i].LivestreamID); err != nil {
+			return []Livecomment{}, err
+		}
+		livestream, err := fillLivestreamResponse(ctx, db, livestreamModel)
+		if err != nil {
+			return []Livecomment{}, err
+		}
+		livestreams[i] = livestream
+	}
+
+	livecomments := make([]Livecomment, len(livecommentModels))
+	for i := range livecommentModels {
+		livecomments[i] = Livecomment{
+			ID:         livecommentModels[i].ID,
+			User:       commentOwners[i],
+			Livestream: livestreams[i],
+			Comment:    livecommentModels[i].Comment,
+			Tip:        livecommentModels[i].Tip,
+			CreatedAt:  livecommentModels[i].CreatedAt,
+		}
+	}
+
+	return livecomments, nil
 }
 
 func fillLivecommentReportResponse(ctx context.Context, db *sqlx.DB, reportModel LivecommentReportModel) (LivecommentReport, error) {
