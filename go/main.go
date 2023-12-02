@@ -35,6 +35,10 @@ var (
 	secret                   = []byte("isucon13_session_cookiestore_defaultsecret")
 )
 
+var (
+	hashCache = NewCache[string, [32]byte]()
+)
+
 func init() {
 	log.SetFlags(log.Ldate | log.Ltime | log.Lshortfile)
 	if secretKey, ok := os.LookupEnv("ISUCON13_SESSION_SECRETKEY"); ok {
@@ -141,7 +145,7 @@ func createIndexQueries() []string {
 }
 
 func initCaches() {
-
+	hashCache.Init()
 }
 
 func initializeHandler(c echo.Context) error {
