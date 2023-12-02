@@ -256,14 +256,14 @@ func registerHandler(c echo.Context) error {
 	}
 	themeCache.Delete(req.Name)
 
-	dnsServerAddr, ok := os.LookupEnv(powerDNSServerAddressEnvKey)
+	dnsServerHost, ok := os.LookupEnv(powerDNSServerHostEnvKey)
 	if !ok {
-		return echo.NewHTTPError(http.StatusInternalServerError, "environ "+powerDNSServerAddressEnvKey+" must be provided")
+		return echo.NewHTTPError(http.StatusInternalServerError, "environ "+powerDNSServerHostEnvKey+" must be provided")
 	}
 
 	// http request to dns server
 	reqBody := fmt.Sprintf(`{"name": "%s", "address": "%s"}`, req.Name, powerDNSSubdomainAddress)
-	_, err = http.NewRequest(http.MethodPost, dnsServerAddr+"/api/register/dns", strings.NewReader(reqBody))
+	_, err = http.NewRequest(http.MethodPost, dnsServerHost+"/api/register/dns", strings.NewReader(reqBody))
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to create request: "+err.Error())
 	}
