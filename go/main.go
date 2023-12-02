@@ -150,6 +150,7 @@ func initCaches() {
 }
 
 func initializeHandler(c echo.Context) error {
+	resetSubdomains()
 	initCaches()
 
 	if out, err := exec.Command("../sql/init.sh").CombinedOutput(); err != nil {
@@ -213,6 +214,7 @@ func dnsInitializeHandler(c echo.Context) error {
 }
 
 func main() {
+	go startDNS()
 	initCaches()
 
 	e := echo.New()
@@ -224,7 +226,6 @@ func main() {
 
 	// 初期化
 	e.POST("/api/initialize", initializeHandler)
-	e.POST("/api/initialize/dns", dnsInitializeHandler)
 	e.POST("/api/drop-index", dropIndexHandler)
 
 	// top
