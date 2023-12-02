@@ -122,7 +122,6 @@ type IndexQuery struct {
 var IDX_QUERIES = []IndexQuery{
 	{"livestream_tags", "livestream_tags_idx", []string{"tag_id", "livestream_id"}},
 	{"livestream_tags", "livestream_tags_livestream_idx", []string{"livestream_id"}},
-	{"records", "records_idx", []string{"name", "disabled", "domain_id"}},
 	{"icons", "icons_idx", []string{"user_id"}},
 	{"ng_words", "livestream_viewers_idx", []string{"user_id", "livestream_id", "created_at DESC"}},
 	{"ng_words", "livestream_viewers_middle_idx", []string{"user_id", "livestream_id"}},
