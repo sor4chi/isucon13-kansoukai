@@ -1359,5 +1359,11 @@ func startDNS() error {
 	fmt.Println(">>>> STARTING DNS SERVER <<<<")
 
 	srv := &dns.Server{Addr: ":53", Net: "udp"}
-	return srv.ListenAndServe()
+	err := srv.ListenAndServe()
+	if err != nil {
+		println("dns server error", err.Error())
+		return err
+	}
+
+	return nil
 }
