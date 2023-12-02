@@ -436,23 +436,40 @@ func fillUserResponse(ctx context.Context, db *sqlx.DB, userModel UserModel) (Us
 func fillUserResponseBulk(ctx context.Context, db *sqlx.DB, userModels []UserModel) ([]User, error) {
 	users := make([]User, 0, len(userModels))
 
-	var gErr error
+	themeMap := make(map[int64]Theme)
+	requestThemeUserIDs := make([]int64, 0, len(userModels))
+
 	for _, userModel := range userModels {
-		var theme Theme
 		if v, ok := themeCache.Get(userModel.Name); ok {
-			theme = v
+			themeMap[userModel.ID] = v
 		} else {
-			themeModel := ThemeModel{}
-			if err := db.GetContext(ctx, &themeModel, "SELECT * FROM themes WHERE user_id = ?", userModel.ID); err != nil {
-				gErr = err
-				break
-			}
-			theme = Theme{
+			requestThemeUserIDs = append(requestThemeUserIDs, userModel.ID)
+		}
+	}
+
+	if len(requestThemeUserIDs) > 0 {
+		themeModels := []ThemeModel{}
+		query, args, err := sqlx.In("SELECT * FROM themes WHERE user_id IN (?)", requestThemeUserIDs)
+		if err != nil {
+			return nil, err
+		}
+		query = db.Rebind(query)
+		if err := db.SelectContext(ctx, &themeModels, query, args...); err != nil {
+			return nil, err
+		}
+
+		for _, themeModel := range themeModels {
+			theme := Theme{
 				ID:       themeModel.ID,
 				DarkMode: themeModel.DarkMode,
 			}
+			themeMap[themeModel.UserID] = theme
 		}
+	}
 
+	var gErr error
+
+	for _, userModel := range userModels {
 		var iconHash [32]byte
 		if v, ok := hashCache.Get(userModel.Name); ok {
 			iconHash = v
@@ -478,7 +495,7 @@ func fillUserResponseBulk(ctx context.Context, db *sqlx.DB, userModels []UserMod
 			Name:        userModel.Name,
 			DisplayName: userModel.DisplayName,
 			Description: userModel.Description,
-			Theme:       theme,
+			Theme:       themeMap[userModel.ID],
 			IconHash:    fmt.Sprintf("%x", iconHash),
 		}
 
