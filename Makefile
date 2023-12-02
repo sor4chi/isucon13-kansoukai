@@ -35,7 +35,7 @@ dump-mysql:
 deploy-all: conf-deploy app-deploy
 
 .PHONY: conf-deploy
-conf-deploy: nginx-conf-deploy mysql-conf-deploy
+conf-deploy: nginx-conf-deploy mysql-conf-deploy env-deploy
 
 .PHONY: nginx-conf-deploy
 nginx-conf-deploy:
@@ -52,6 +52,12 @@ mysql-conf-deploy:
 	sudo cp -r $(SERVER)/etc/mysql/* $(MYSQL_CONF)
 	sudo systemctl restart mysql
 
+.PHONY: env-deploy
+env-deploy:
+	echo "env deploy"
+	rm /home/isucon/env.sh
+	sudo cp $(SERVER)/env.sh /home/isucon/env.sh
+
 .PHONY: app-deploy
 app-deploy:
 	echo "app deploy"
@@ -63,3 +69,4 @@ link:
 	echo "link"
 	rm -f /home/isucon/env.sh
 	sudo ln $(SERVER)/env.sh /home/isucon/env.sh
+
