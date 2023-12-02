@@ -474,8 +474,10 @@ func fillLivestreamResponseBulk(ctx context.Context, db *sqlx.DB, livestreamMode
 	var gErr error
 
 	userIDs := make([]int64, len(livestreamModels))
+	livestreamIDs := make([]int64, len(livestreamModels))
 	for i := range livestreamModels {
 		userIDs[i] = livestreamModels[i].UserID
+		livestreamIDs[i] = livestreamModels[i].ID
 	}
 
 	var ownerModels []*UserModel
@@ -496,17 +498,36 @@ func fillLivestreamResponseBulk(ctx context.Context, db *sqlx.DB, livestreamMode
 		owners[owner.ID] = owner
 	}
 
+	var allLivestreamTagModels []*LivestreamTagModel
+	query, params, err = sqlx.In("SELECT * FROM livestream_tags WHERE livestream_id IN (?)", livestreamIDs)
+	if err != nil {
+		return nil, err
+	}
+	if err := db.SelectContext(ctx, &allLivestreamTagModels, query, params...); err != nil {
+		return nil, err
+	}
+
+	livestreamTagsMap := make(map[int64][]*LivestreamTagModel, len(allLivestreamTagModels))
+	for i := range allLivestreamTagModels {
+		livestreamTagsModel := allLivestreamTagModels[i]
+		if _, ok := livestreamTagsMap[livestreamTagsModel.LivestreamID]; !ok {
+			livestreamTagsMap[livestreamTagsModel.LivestreamID] = []*LivestreamTagModel{livestreamTagsModel}
+		} else {
+			livestreamTagsMap[livestreamTagsModel.LivestreamID] = append(livestreamTagsMap[livestreamTagsModel.LivestreamID], livestreamTagsModel)
+		}
+	}
+
 	for i := range livestreamModels {
 		livestreamModel := livestreamModels[i]
-		owner, ok := owners[livestreamModels[i].UserID]
+		owner, ok := owners[livestreamModel.UserID]
 		if !ok {
-			gErr = fmt.Errorf("failed to get owner of livestream: %d", livestreamModels[i].UserID)
+			gErr = fmt.Errorf("failed to get owner of livestream: %d", livestreamModel.UserID)
 			break
 		}
 
-		var livestreamTagModels []*LivestreamTagModel
-		if err := db.SelectContext(ctx, &livestreamTagModels, "SELECT * FROM livestream_tags WHERE livestream_id = ?", livestreamModel.ID); err != nil {
-			gErr = err
+		livestreamTagModels, ok := livestreamTagsMap[livestreamModel.ID]
+		if !ok {
+			gErr = fmt.Errorf("failed to get livestream tags of livestream: %d", livestreamModel.ID)
 			break
 		}
 
