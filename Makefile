@@ -55,7 +55,7 @@ mysql-conf-deploy:
 .PHONY: env-deploy
 env-deploy:
 	echo "env deploy"
-	rm /home/isucon/env.sh
+	rm -f /home/isucon/env.sh
 	sudo cp $(SERVER)/env.sh /home/isucon/env.sh
 
 .PHONY: app-deploy
@@ -63,10 +63,3 @@ app-deploy:
 	echo "app deploy"
 	cd $(APP) && go build -o $(APP_BINARY) *.go
 	sudo systemctl restart $(SERVICE)
-
-.PHONY: link
-link:
-	echo "link"
-	rm -f /home/isucon/env.sh
-	sudo ln $(SERVER)/env.sh /home/isucon/env.sh
-
