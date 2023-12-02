@@ -140,7 +140,13 @@ func createIndexQueries() []string {
 	return qs
 }
 
+func initCaches() {
+
+}
+
 func initializeHandler(c echo.Context) error {
+	initCaches()
+
 	if out, err := exec.Command("../sql/init.sh").CombinedOutput(); err != nil {
 		c.Logger().Warnf("init.sh failed with err=%s", string(out))
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to initialize: "+err.Error())
@@ -181,6 +187,8 @@ func dropIndexHandler(c echo.Context) error {
 }
 
 func main() {
+	initCaches()
+
 	e := echo.New()
 	e.Debug = true
 	e.Logger.SetLevel(echolog.DEBUG)
