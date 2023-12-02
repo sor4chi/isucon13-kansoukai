@@ -488,3 +488,69 @@ func fillLivecommentReportResponse(ctx context.Context, db *sqlx.DB, reportModel
 	}
 	return report, nil
 }
+
+func fillLivecommentReportResponseBulk(ctx context.Context, db *sqlx.DB, reportModels []LivecommentReportModel) ([]LivecommentReport, error) {
+	if len(reportModels) == 0 {
+		return []LivecommentReport{}, nil
+	}
+
+	userIDs := make([]int64, len(reportModels))
+	livecommentIDs := make([]int64, len(reportModels))
+
+	for i := range reportModels {
+		userIDs[i] = reportModels[i].UserID
+		livecommentIDs[i] = reportModels[i].LivecommentID
+	}
+
+	userModels := []UserModel{}
+	query, args, err := sqlx.In("SELECT * FROM users WHERE id IN (?)", userIDs)
+	if err != nil {
+		return []LivecommentReport{}, err
+	}
+	query = db.Rebind(query)
+	if err := db.SelectContext(ctx, &userModels, query, args...); err != nil {
+		return []LivecommentReport{}, err
+	}
+
+	livecommentModels := []LivecommentModel{}
+	query, args, err = sqlx.In("SELECT * FROM livecomments WHERE id IN (?)", livecommentIDs)
+	if err != nil {
+		return []LivecommentReport{}, err
+	}
+	query = db.Rebind(query)
+	if err := db.SelectContext(ctx, &livecommentModels, query, args...); err != nil {
+		return []LivecommentReport{}, err
+	}
+
+	reporters, err := fillUserResponseBulk(ctx, db, userModels)
+	if err != nil {
+		return []LivecommentReport{}, err
+	}
+
+	reportersMap := make(map[int64]User, len(reporters))
+	for i := range reporters {
+		reportersMap[reporters[i].ID] = reporters[i]
+	}
+
+	livecomments, err := fillLivecommentResponseBulk(ctx, db, livecommentModels)
+	if err != nil {
+		return []LivecommentReport{}, err
+	}
+
+	livecommentsMap := make(map[int64]Livecomment, len(livecomments))
+	for i := range livecomments {
+		livecommentsMap[livecomments[i].ID] = livecomments[i]
+	}
+
+	reports := make([]LivecommentReport, len(reportModels))
+	for i := range reportModels {
+		reports[i] = LivecommentReport{
+			ID:          reportModels[i].ID,
+			Reporter:    reportersMap[reportModels[i].UserID],
+			Livecomment: livecommentsMap[reportModels[i].LivecommentID],
+			CreatedAt:   reportModels[i].CreatedAt,
+		}
+	}
+
+	return reports, nil
+}

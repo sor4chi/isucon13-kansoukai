@@ -412,18 +412,14 @@ func getLivecommentReportsHandler(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusForbidden, "can't get other streamer's livecomment reports")
 	}
 
-	var reportModels []*LivecommentReportModel
+	var reportModels []LivecommentReportModel
 	if err := dbConn.SelectContext(ctx, &reportModels, "SELECT * FROM livecomment_reports WHERE livestream_id = ?", livestreamID); err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to get livecomment reports: "+err.Error())
 	}
 
-	reports := make([]LivecommentReport, len(reportModels))
-	for i := range reportModels {
-		report, err := fillLivecommentReportResponse(ctx, dbConn, *reportModels[i])
-		if err != nil {
-			return echo.NewHTTPError(http.StatusInternalServerError, "failed to fill livecomment report: "+err.Error())
-		}
-		reports[i] = report
+	reports, err := fillLivecommentReportResponseBulk(ctx, dbConn, reportModels)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "failed to fill livecomment report: "+err.Error())
 	}
 
 	return c.JSON(http.StatusOK, reports)
