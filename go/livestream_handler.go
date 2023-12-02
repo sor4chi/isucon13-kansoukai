@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -214,15 +215,27 @@ func searchLivestreamsHandler(c echo.Context) error {
 			livestreamIDs[i] = keyTaggedLivestreams[i].LivestreamID
 		}
 
-		if len(livestreamIDs) > 0 {
-			query, params, err = sqlx.In("SELECT * FROM livestreams WHERE id IN (?) ORDER BY id DESC", livestreamIDs)
-			if err != nil {
-				return echo.NewHTTPError(http.StatusInternalServerError, "failed to construct IN query: "+err.Error())
+		livestreamModels = make([]*LivestreamModel, len(livestreamIDs))
+		for i := range livestreamIDs {
+			livestreamModel, ok := livestreamModelByIdCache.Get(livestreamIDs[i])
+			if !ok {
+				if err := dbConn.GetContext(ctx, &livestreamModel, "SELECT * FROM livestreams WHERE id = ?", livestreamIDs[i]); err != nil {
+					return echo.NewHTTPError(http.StatusInternalServerError, "failed to get livestream: "+err.Error())
+				}
+				livestreamModelByIdCache.Set(livestreamIDs[i], livestreamModel)
+				cached, ok := livestreamModelByUserIDCache.Get(livestreamModel.UserID)
+				if !ok {
+					cached = make([]*LivestreamModel, 0)
+				}
+				livestreamModelByUserIDCache.Set(livestreamModel.UserID, append(cached, &livestreamModel))
 			}
-			if err := dbConn.SelectContext(ctx, &livestreamModels, query, params...); err != nil {
-				return echo.NewHTTPError(http.StatusInternalServerError, "failed to get livestreams: "+err.Error())
-			}
+			livestreamModels[i] = &livestreamModel
 		}
+
+		sort.Slice(livestreamModels, func(i, j int) bool {
+			return livestreamModels[i].ID > livestreamModels[j].ID
+		})
+
 	} else {
 		// 検索条件なし
 		query := `SELECT * FROM livestreams ORDER BY id DESC`
