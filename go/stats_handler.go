@@ -264,35 +264,29 @@ func getLivestreamStatisticsHandler(c echo.Context) error {
 		rank++
 	}
 
-	// 視聴者数算出
-	var viewersCount int64
-	if err := dbConn.GetContext(ctx, &viewersCount, `SELECT COUNT(*) FROM livestreams l INNER JOIN livestream_viewers_history h ON h.livestream_id = l.id WHERE l.id = ?`, livestreamID); err != nil && !errors.Is(err, sql.ErrNoRows) {
-		return echo.NewHTTPError(http.StatusInternalServerError, "failed to count livestream viewers: "+err.Error())
+	type Stats struct {
+		ViewersCount   int64 `db:"viewers_count"`   // 視聴者数
+		MaxTip         int64 `db:"max_tip"`         // 最大チップ額
+		TotalReactions int64 `db:"total_reactions"` // リアクション数
+		TotalReports   int64 `db:"total_reports"`   // スパム報告数
 	}
 
-	// 最大チップ額
-	var maxTip int64
-	if err := dbConn.GetContext(ctx, &maxTip, `SELECT IFNULL(MAX(tip), 0) FROM livestreams l INNER JOIN livecomments l2 ON l2.livestream_id = l.id WHERE l.id = ?`, livestreamID); err != nil && !errors.Is(err, sql.ErrNoRows) {
-		return echo.NewHTTPError(http.StatusInternalServerError, "failed to find maximum tip livecomment: "+err.Error())
-	}
-
-	// リアクション数
-	var totalReactions int64
-	if err := dbConn.GetContext(ctx, &totalReactions, "SELECT COUNT(*) FROM livestreams l INNER JOIN reactions r ON r.livestream_id = l.id WHERE l.id = ?", livestreamID); err != nil && !errors.Is(err, sql.ErrNoRows) {
-		return echo.NewHTTPError(http.StatusInternalServerError, "failed to count total reactions: "+err.Error())
-	}
-
-	// スパム報告数
-	var totalReports int64
-	if err := dbConn.GetContext(ctx, &totalReports, `SELECT COUNT(*) FROM livestreams l INNER JOIN livecomment_reports r ON r.livestream_id = l.id WHERE l.id = ?`, livestreamID); err != nil && !errors.Is(err, sql.ErrNoRows) {
-		return echo.NewHTTPError(http.StatusInternalServerError, "failed to count total spam reports: "+err.Error())
+	var stats Stats
+	if err := dbConn.GetContext(ctx, &stats, `
+	SELECT
+		(SELECT COUNT(*) FROM livestreams l INNER JOIN livestream_viewers_history h ON h.livestream_id = l.id WHERE l.id = ?) AS viewers_count,
+		(SELECT IFNULL(MAX(tip), 0) FROM livestreams l INNER JOIN livecomments l2 ON l2.livestream_id = l.id WHERE l.id = ?) AS max_tip,
+		(SELECT COUNT(*) FROM livestreams l INNER JOIN reactions r ON r.livestream_id = l.id WHERE l.id = ?) AS total_reactions,
+		(SELECT COUNT(*) FROM livestreams l INNER JOIN livecomment_reports r ON r.livestream_id = l.id WHERE l.id = ?) AS total_reports
+	`, livestreamID, livestreamID, livestreamID, livestreamID); err != nil && !errors.Is(err, sql.ErrNoRows) {
+		return echo.NewHTTPError(http.StatusInternalServerError, "failed to get stats: "+err.Error())
 	}
 
 	return c.JSON(http.StatusOK, LivestreamStatistics{
 		Rank:           rank,
-		ViewersCount:   viewersCount,
-		MaxTip:         maxTip,
-		TotalReactions: totalReactions,
-		TotalReports:   totalReports,
+		ViewersCount:   stats.ViewersCount,
+		MaxTip:         stats.MaxTip,
+		TotalReactions: stats.TotalReactions,
+		TotalReports:   stats.TotalReports,
 	})
 }
