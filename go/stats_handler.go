@@ -72,14 +72,8 @@ func getUserStatisticsHandler(c echo.Context) error {
 	// ユーザごとに、紐づく配信について、累計リアクション数、累計ライブコメント数、累計売上金額を算出
 	// また、現在の合計視聴者数もだす
 
-	tx, err := dbConn.BeginTxx(ctx, nil)
-	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, "failed to begin transaction: "+err.Error())
-	}
-	defer tx.Rollback()
-
 	var user UserModel
-	if err := tx.GetContext(ctx, &user, "SELECT * FROM users WHERE name = ?", username); err != nil {
+	if err := dbConn.GetContext(ctx, &user, "SELECT * FROM users WHERE name = ?", username); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return echo.NewHTTPError(http.StatusBadRequest, "not found user that has the given username")
 		} else {
@@ -89,7 +83,7 @@ func getUserStatisticsHandler(c echo.Context) error {
 
 	// ランク算出
 	var users []*UserModel
-	if err := tx.SelectContext(ctx, &users, "SELECT * FROM users"); err != nil {
+	if err := dbConn.SelectContext(ctx, &users, "SELECT * FROM users"); err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to get users: "+err.Error())
 	}
 
@@ -108,7 +102,7 @@ func getUserStatisticsHandler(c echo.Context) error {
 		Reactions int64  `db:"reactions"`
 		TotalTips int64  `db:"total_tips"`
 	}
-	if err := tx.SelectContext(ctx, &entries, query); err != nil && !errors.Is(err, sql.ErrNoRows) {
+	if err := dbConn.SelectContext(ctx, &entries, query); err != nil && !errors.Is(err, sql.ErrNoRows) {
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to get users: "+err.Error())
 	}
 
@@ -137,7 +131,7 @@ func getUserStatisticsHandler(c echo.Context) error {
     INNER JOIN reactions r ON r.livestream_id = l.id
     WHERE u.name = ?
 	`
-	if err := tx.GetContext(ctx, &totalReactions, query, username); err != nil && !errors.Is(err, sql.ErrNoRows) {
+	if err := dbConn.GetContext(ctx, &totalReactions, query, username); err != nil && !errors.Is(err, sql.ErrNoRows) {
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to count total reactions: "+err.Error())
 	}
 
@@ -145,7 +139,7 @@ func getUserStatisticsHandler(c echo.Context) error {
 	var totalLivecomments int64
 	var totalTip int64
 	var livestreams []*LivestreamModel
-	if err := tx.SelectContext(ctx, &livestreams, "SELECT * FROM livestreams WHERE user_id = ?", user.ID); err != nil && !errors.Is(err, sql.ErrNoRows) {
+	if err := dbConn.SelectContext(ctx, &livestreams, "SELECT * FROM livestreams WHERE user_id = ?", user.ID); err != nil && !errors.Is(err, sql.ErrNoRows) {
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to get livestreams: "+err.Error())
 	}
 
@@ -158,9 +152,9 @@ func getUserStatisticsHandler(c echo.Context) error {
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to build query: "+err.Error())
 	}
-	query = tx.Rebind(query)
+	query = dbConn.Rebind(query)
 	var livecomments []*LivecommentModel
-	if err := tx.SelectContext(ctx, &livecomments, query, args...); err != nil && !errors.Is(err, sql.ErrNoRows) {
+	if err := dbConn.SelectContext(ctx, &livecomments, query, args...); err != nil && !errors.Is(err, sql.ErrNoRows) {
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to get livecomments: "+err.Error())
 	}
 
@@ -176,8 +170,8 @@ func getUserStatisticsHandler(c echo.Context) error {
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to build query: "+err.Error())
 	}
-	query = tx.Rebind(query)
-	if err := tx.GetContext(ctx, &viewersCount, query, args...); err != nil && !errors.Is(err, sql.ErrNoRows) {
+	query = dbConn.Rebind(query)
+	if err := dbConn.GetContext(ctx, &viewersCount, query, args...); err != nil && !errors.Is(err, sql.ErrNoRows) {
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to get livestream_view_history: "+err.Error())
 	}
 
@@ -193,7 +187,7 @@ func getUserStatisticsHandler(c echo.Context) error {
 	ORDER BY COUNT(*) DESC, emoji_name DESC
 	LIMIT 1
 	`
-	if err := tx.GetContext(ctx, &favoriteEmoji, query, username); err != nil && !errors.Is(err, sql.ErrNoRows) {
+	if err := dbConn.GetContext(ctx, &favoriteEmoji, query, username); err != nil && !errors.Is(err, sql.ErrNoRows) {
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to find favorite emoji: "+err.Error())
 	}
 
