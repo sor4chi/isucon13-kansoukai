@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -89,6 +90,12 @@ func getIconHandler(c echo.Context) error {
 	ctx := c.Request().Context()
 
 	username := c.Param("username")
+
+	if v, ok := hashCache.Get(username); ok {
+		if strings.Contains(c.Request().Header.Get("If-None-Match"), fmt.Sprintf("%x", v)) {
+			return c.NoContent(http.StatusNotModified)
+		}
+	}
 
 	var user UserModel
 	if err := dbConn.GetContext(ctx, &user, "SELECT * FROM users WHERE name = ?", username); err != nil {
