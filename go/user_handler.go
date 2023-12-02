@@ -32,6 +32,14 @@ const (
 
 var fallbackImage = "../img/NoImage.jpg"
 
+var fallbackImageHash = func() [32]byte {
+	f, err := os.ReadFile(fallbackImage)
+	if err != nil {
+		panic(err)
+	}
+	return sha256.Sum256(f)
+}()
+
 type UserModel struct {
 	ID             int64  `db:"id"`
 	Name           string `db:"name"`
@@ -384,18 +392,15 @@ func fillUserResponse(ctx context.Context, db *sqlx.DB, userModel UserModel) (Us
 	if v, ok := hashCache.Get(userModel.Name); ok {
 		iconHash = v
 	} else {
-
 		var image []byte
 		if err := db.GetContext(ctx, &image, "SELECT image FROM icons WHERE user_id = ?", userModel.ID); err != nil {
 			if !errors.Is(err, sql.ErrNoRows) {
 				return User{}, err
 			}
-			image, err = os.ReadFile(fallbackImage)
-			if err != nil {
-				return User{}, err
-			}
+			iconHash = fallbackImageHash
+		} else {
+			iconHash = sha256.Sum256(image)
 		}
-		iconHash = sha256.Sum256(image)
 		hashCache.Set(userModel.Name, iconHash)
 	}
 
