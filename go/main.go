@@ -108,31 +108,46 @@ func connectDB(logger echo.Logger) (*sqlx.DB, error) {
 	return db, nil
 }
 
+type IndexQuery struct {
+	Table string
+	Name  string
+	Cols  []string
+}
+
+var IDX_QUERIES = []IndexQuery{
+	{"livestream_tags", "livestream_tags_idx", []string{"tag_id", "livestream_id"}},
+	{"livestream_tags", "livestream_tags_livestream_idx", []string{"livestream_id"}},
+	{"records", "records_idx", []string{"name", "disabled", "domain_id"}},
+	{"icons", "icons_idx", []string{"user_id"}},
+	{"ng_words", "livestream_viewers_idx", []string{"user_id", "livestream_id", "created_at DESC"}},
+	{"ng_words", "livestream_viewers_middle_idx", []string{"user_id", "livestream_id"}},
+	{"ng_words", "livestream_viewers_small_idx", []string{"livestream_id"}},
+	{"reservation_slots", "reservation_slots_idx", []string{"start_at", "end_at"}},
+	{"reservation_slots", "reservation_slots_idx_big_idx", []string{"slot", "start_at", "end_at"}},
+	{"livestream", "livestream_idx", []string{"user_id"}},
+	{"livecomment_reports", "livestream_id_idx", []string{"livestream_id"}},
+	{"reactions", "livestream_id_idx", []string{"livestream_id", "created_at"}},
+	{"reactions", "livestream_id_short_idx", []string{"livestream_id"}},
+	{"livecomments", "livestream_id_idx", []string{"livestream_id"}},
+	{"themes", "themes_idx", []string{"user_id"}},
+}
+
+func createIndexQueries() []string {
+	qs := make([]string, 0, len(IDX_QUERIES))
+	for _, idx := range IDX_QUERIES {
+		qs = append(qs, fmt.Sprintf("ALTER TABLE `%s` ADD INDEX `%s` (%s)", idx.Table, idx.Name, "`"+idx.Cols[0]+"`"))
+	}
+	return qs
+}
+
 func initializeHandler(c echo.Context) error {
 	if out, err := exec.Command("../sql/init.sh").CombinedOutput(); err != nil {
 		c.Logger().Warnf("init.sh failed with err=%s", string(out))
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to initialize: "+err.Error())
 	}
 
-	idxqs := []string{
-		"ALTER TABLE `livestream_tags` ADD INDEX `livestream_tags_idx` (`tag_id`, `livestream_id`)",
-		"ALTER TABLE `livestream_tags` ADD INDEX `livestream_tags_livestream_idx` (`livestream_id`)",
-		"ALTER TABLE `records` ADD INDEX `records_idx` (`name`,`disabled`,`domain_id`)",
-		"ALTER TABLE `icons` ADD INDEX `icons_idx` (`user_id`)",
-		"ALTER TABLE `ng_words` ADD INDEX `livestream_viewers_idx` (`user_id`, `livestream_id`, `created_at` DESC)",
-		"ALTER TABLE `ng_words` ADD INDEX `livestream_viewers_middle_idx` (`user_id`, `livestream_id`)",
-		"ALTER TABLE `ng_words` ADD INDEX `livestream_viewers_small_idx` (`livestream_id`)",
-		"ALTER TABLE `reservation_slots` ADD INDEX `reservation_slots_idx` (`start_at`, `end_at`)",
-		"ALTER TABLE `reservation_slots` ADD INDEX `reservation_slots_idx_big_idx` (`slot`, `start_at`, `end_at`)",
-		"ALTER TABLE `livestream` ADD INDEX `livestream_idx` (`user_id`)",
-		"ALTER TABLE `livecomment_reports` ADD INDEX `livestream_id_idx` (`livestream_id`)",
-		"ALTER TABLE `reactions` ADD INDEX `livestream_id_idx` (`livestream_id`, `created_at`)",
-		"ALTER TABLE `livecomments` ADD INDEX `livestream_id_idx` (`livestream_id`)",
-		"ALTER TABLE `themes` ADD INDEX `themes_idx` (`user_id`)",
-	}
-
 	wg := sync.WaitGroup{}
-	for _, qs := range idxqs {
+	for _, qs := range createIndexQueries() {
 		wg.Add(1)
 		go func(qs string) {
 			defer wg.Done()
@@ -155,6 +170,16 @@ func initializeHandler(c echo.Context) error {
 	})
 }
 
+func dropIndexHandler(c echo.Context) error {
+	for _, idx := range IDX_QUERIES {
+		if _, err := dbConn.Exec(fmt.Sprintf("ALTER TABLE `%s` DROP INDEX `%s`", idx.Table, idx.Name)); err != nil {
+			c.Logger().Warnf("failed to drop index: %s", err.Error())
+		}
+	}
+
+	return c.NoContent(http.StatusOK)
+}
+
 func main() {
 	e := echo.New()
 	e.Debug = true
@@ -167,6 +192,7 @@ func main() {
 
 	// 初期化
 	e.POST("/api/initialize", initializeHandler)
+	e.POST("/api/drop-index", dropIndexHandler)
 
 	// top
 	e.GET("/api/tag", getTagHandler)
