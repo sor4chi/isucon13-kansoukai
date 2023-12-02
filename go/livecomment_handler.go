@@ -402,7 +402,6 @@ func fillLivecommentResponseBulk(ctx context.Context, db *sqlx.DB, livecommentMo
 		return []Livecomment{}, nil
 	}
 
-	commentOwners := make([]User, len(livecommentModels))
 	livestreamIDs := make([]int64, len(livecommentModels))
 
 	userIds := make([]int64, len(livecommentModels))
@@ -411,7 +410,7 @@ func fillLivecommentResponseBulk(ctx context.Context, db *sqlx.DB, livecommentMo
 		userIds[i] = livecommentModels[i].UserID
 	}
 
-	userModels := []*UserModel{}
+	userModels := []UserModel{}
 	query, args, err := sqlx.In("SELECT * FROM users WHERE id IN (?)", userIds)
 	if err != nil {
 		return []Livecomment{}, err
@@ -421,20 +420,18 @@ func fillLivecommentResponseBulk(ctx context.Context, db *sqlx.DB, livecommentMo
 		return []Livecomment{}, err
 	}
 
-	commentOwnerModelMap := make(map[int64]UserModel)
-	for i := range userModels {
-		commentOwnerModelMap[userModels[i].ID] = *userModels[i]
+	for i := range livecommentModels {
+		livestreamIDs[i] = livecommentModels[i].LivestreamID
 	}
 
-	for i := range livecommentModels {
-		commentOwnerModel := commentOwnerModelMap[livecommentModels[i].UserID]
-		commentOwner, err := fillUserResponse(ctx, db, commentOwnerModel)
-		if err != nil {
-			return []Livecomment{}, err
-		}
-		commentOwners[i] = commentOwner
+	commentOwners, err := fillUserResponseBulk(ctx, db, userModels)
+	if err != nil {
+		return []Livecomment{}, err
+	}
 
-		livestreamIDs[i] = livecommentModels[i].LivestreamID
+	commentOwnersMap := make(map[int64]User, len(commentOwners))
+	for i := range commentOwners {
+		commentOwnersMap[commentOwners[i].ID] = commentOwners[i]
 	}
 
 	livestreamModels := []*LivestreamModel{}
@@ -460,7 +457,7 @@ func fillLivecommentResponseBulk(ctx context.Context, db *sqlx.DB, livecommentMo
 	for i := range livecommentModels {
 		livecomments[i] = Livecomment{
 			ID:         livecommentModels[i].ID,
-			User:       commentOwners[i],
+			User:       commentOwnersMap[livecommentModels[i].UserID],
 			Livestream: livestreamMap[livecommentModels[i].LivestreamID],
 			Comment:    livecommentModels[i].Comment,
 			Tip:        livecommentModels[i].Tip,
