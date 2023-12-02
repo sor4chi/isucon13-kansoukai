@@ -116,6 +116,11 @@ func initializeHandler(c echo.Context) error {
 
 	idxqs := []string{
 		"ALTER TABLE `livestream_tags` ADD INDEX `livestream_tags_idx` (`tag_id`, `livestream_id`)",
+		"ALTER TABLE `records` ADD INDEX `records_idx` (`name`,`disabled`,`domain_id`)",
+		"ALTER TABLE `icons` ADD INDEX `icons_idx` (`user_id`)",
+		"ALTER TABLE `ng_words` ADD INDEX `livestream_viewers_idx` (`user_id`, `livestream_id`, `created_at` DESC)",
+		"ALTER TABLE `reservation_slots` ADD INDEX `reservation_slots_idx` (`start_at`, `end_at`)",
+		"ALTER TABLE `livestream` ADD INDEX `livestream_idx` (`user_id`)",
 	}
 
 	wg := sync.WaitGroup{}
