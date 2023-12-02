@@ -271,10 +271,11 @@ func getMyLivestreamsHandler(c echo.Context) error {
 	// existence already checked
 	userID := sess.Values[defaultUserIDKey].(int64)
 
-	var livestreamModels []*LivestreamModel
-	if err := dbConn.SelectContext(ctx, &livestreamModels, "SELECT * FROM livestreams WHERE user_id = ?", userID); err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, "failed to get livestreams: "+err.Error())
+	livestreamModels, ok := livestreamModelByUserIDCache.Get(userID)
+	if !ok {
+		livestreamModels = make([]*LivestreamModel, 0)
 	}
+
 	livestreams, err := fillLivestreamResponseBulk(ctx, dbConn, livestreamModels)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to fill livestream: "+err.Error())
@@ -296,9 +297,9 @@ func getUserLivestreamsHandler(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusNotFound, "user not found")
 	}
 
-	var livestreamModels []*LivestreamModel
-	if err := dbConn.SelectContext(ctx, &livestreamModels, "SELECT * FROM livestreams WHERE user_id = ?", user.ID); err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, "failed to get livestreams: "+err.Error())
+	livestreamModels, ok := livestreamModelByUserIDCache.Get(user.ID)
+	if !ok {
+		livestreamModels = make([]*LivestreamModel, 0)
 	}
 
 	livestreams, err := fillLivestreamResponseBulk(ctx, dbConn, livestreamModels)
