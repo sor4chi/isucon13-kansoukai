@@ -527,8 +527,7 @@ func fillLivestreamResponseBulk(ctx context.Context, db *sqlx.DB, livestreamMode
 
 		livestreamTagModels, ok := livestreamTagsMap[livestreamModel.ID]
 		if !ok {
-			gErr = fmt.Errorf("failed to get livestream tags of livestream: %d", livestreamModel.ID)
-			break
+			livestreamTagModels = []*LivestreamTagModel{}
 		}
 
 		tags := make([]Tag, len(livestreamTagModels))
