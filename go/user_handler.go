@@ -11,6 +11,7 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/google/uuid"
@@ -437,9 +438,14 @@ func fillUserResponseBulk(ctx context.Context, db *sqlx.DB, userModels []UserMod
 	users := make([]User, 0, len(userModels))
 
 	themeMap := make(map[int64]Theme)
+	iconHashMap := make(map[int64][32]byte)
 	requestThemeUserIDs := make([]int64, 0, len(userModels))
+	requestIconHashUserIDs := make([]int64, 0, len(userModels))
+
+	userModelsMap := make(map[int64]UserModel, len(userModels))
 
 	for _, userModel := range userModels {
+		userModelsMap[userModel.ID] = userModel
 		if v, ok := themeCache.Get(userModel.Name); ok {
 			themeMap[userModel.ID] = v
 		} else {
@@ -464,39 +470,57 @@ func fillUserResponseBulk(ctx context.Context, db *sqlx.DB, userModels []UserMod
 				DarkMode: themeModel.DarkMode,
 			}
 			themeMap[themeModel.UserID] = theme
+			themeCache.Set(userModelsMap[themeModel.UserID].Name, theme)
+		}
+	}
+
+	for _, userModel := range userModels {
+		if v, ok := hashCache.Get(userModel.Name); ok {
+			iconHashMap[userModel.ID] = v
+		} else {
+			requestIconHashUserIDs = append(requestIconHashUserIDs, userModel.ID)
+		}
+	}
+
+	if len(requestIconHashUserIDs) > 0 {
+		images := []struct {
+			UserID int64  `db:"user_id"`
+			Image  []byte `db:"image"`
+		}{}
+		query, args, err := sqlx.In("SELECT user_id, image FROM icons WHERE user_id IN (?)", requestIconHashUserIDs)
+		if err != nil {
+			return nil, err
+		}
+		query = db.Rebind(query)
+		if err := db.SelectContext(ctx, &images, query, args...); err != nil {
+			return nil, err
+		}
+
+		wg := sync.WaitGroup{}
+		for _, image := range images {
+			wg.Add(1)
+			go func(userID int64, image []byte) {
+				defer wg.Done()
+				iconHashMap[userID] = sha256.Sum256(image)
+			}(image.UserID, image.Image)
+		}
+		wg.Wait()
+
+		for userID, iconHash := range iconHashMap {
+			hashCache.Set(userModelsMap[userID].Name, iconHash)
 		}
 	}
 
 	var gErr error
 
 	for _, userModel := range userModels {
-		var iconHash [32]byte
-		if v, ok := hashCache.Get(userModel.Name); ok {
-			iconHash = v
-		} else {
-			var image []byte
-			if err := db.GetContext(ctx, &image, "SELECT image FROM icons WHERE user_id = ?", userModel.ID); err != nil {
-				if !errors.Is(err, sql.ErrNoRows) {
-					gErr = err
-					break
-				}
-				image, err = os.ReadFile(fallbackImage)
-				if err != nil {
-					gErr = err
-					break
-				}
-			}
-			iconHash = sha256.Sum256(image)
-			hashCache.Set(userModel.Name, iconHash)
-		}
-
 		user := User{
 			ID:          userModel.ID,
 			Name:        userModel.Name,
 			DisplayName: userModel.DisplayName,
 			Description: userModel.Description,
 			Theme:       themeMap[userModel.ID],
-			IconHash:    fmt.Sprintf("%x", iconHash),
+			IconHash:    fmt.Sprintf("%x", iconHashMap[userModel.ID]),
 		}
 
 		users = append(users, user)
