@@ -1321,16 +1321,12 @@ func addSubdomain(subdomain string) {
 }
 
 func startDNS() error {
-	println("start dns")
 	subdomainAdder, ok := os.LookupEnv(powerDNSSubdomainAddressEnvKey)
 	if !ok {
 		return errors.New("powerdns subdomain address is not set")
 	}
 
-	println("subdomain adder", subdomainAdder)
-
 	dns.HandleFunc("u.isucon.dev.", func(w dns.ResponseWriter, r *dns.Msg) {
-		println("dns handle func", r.Question[0].Name)
 		m := new(dns.Msg)
 		m.SetReply(r)
 		if r.Question[0].Qtype == dns.TypeNS && r.Question[0].Name == "u.isucon.dev." {
