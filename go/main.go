@@ -162,6 +162,7 @@ func initCaches() {
 func initializeHandler(c echo.Context) error {
 	resetSubdomains()
 	initCaches()
+	initIconDir()
 
 	if out, err := exec.Command("../sql/init.sh").CombinedOutput(); err != nil {
 		c.Logger().Warnf("init.sh failed with err=%s", string(out))
@@ -196,6 +197,32 @@ func initializeHandler(c echo.Context) error {
 		userModelByIdCache.Set(user.ID, user)
 		userModelByNameCache.Set(user.Name, user)
 	}
+
+	type IconModel struct {
+		ID     int64  `db:"id"`
+		UserID int64  `db:"user_id"`
+		Image  []byte `db:"image"`
+	}
+
+	var icons []IconModel
+	if err := dbConn.Select(&icons, "SELECT * FROM icons"); err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "failed to get icons: "+err.Error())
+	}
+	wg = sync.WaitGroup{}
+	for _, icon := range icons {
+		wg.Add(1)
+		go func(icon IconModel) {
+			defer wg.Done()
+			if err := saveIcon(icon.UserID, icon.Image); err != nil {
+				c.Logger().Warnf("failed to save icon: %s", err.Error())
+			}
+		}(IconModel{
+			ID:     icon.ID,
+			UserID: icon.UserID,
+		})
+	}
+
+	wg.Wait()
 
 	c.Request().Header.Add("Content-Type", "application/json;charset=utf-8")
 	return c.JSON(http.StatusOK, InitializeResponse{
