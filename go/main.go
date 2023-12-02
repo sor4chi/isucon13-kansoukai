@@ -26,6 +26,7 @@ import (
 const (
 	listenPort                     = 8080
 	powerDNSSubdomainAddressEnvKey = "ISUCON13_POWERDNS_SUBDOMAIN_ADDRESS"
+	powerDNSServerAddressEnvKey    = "ISUCON13_POWERDNS_SERVER_ADDRESS"
 )
 
 var (
@@ -240,6 +241,7 @@ func main() {
 
 	// user
 	e.POST("/api/register", registerHandler)
+	e.POST("/api/register/dns", dnsRegisterHandler)
 	e.POST("/api/login", loginHandler)
 	e.GET("/api/user/me", getMeHandler)
 	// フロントエンドで、配信予約のコラボレーターを指定する際に必要

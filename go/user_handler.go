@@ -256,8 +256,16 @@ func registerHandler(c echo.Context) error {
 	}
 	themeCache.Delete(req.Name)
 
-	if out, err := exec.Command("pdnsutil", "add-record", "u.isucon.dev", req.Name, "A", "0", powerDNSSubdomainAddress).CombinedOutput(); err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, string(out)+": "+err.Error())
+	dnsServerAddr, ok := os.LookupEnv(powerDNSServerAddressEnvKey)
+	if !ok {
+		return echo.NewHTTPError(http.StatusInternalServerError, "environ "+powerDNSServerAddressEnvKey+" must be provided")
+	}
+
+	// http request to dns server
+	reqBody := fmt.Sprintf(`{"name": "%s", "address": "%s"}`, req.Name, powerDNSSubdomainAddress)
+	_, err = http.NewRequest(http.MethodPost, dnsServerAddr+"/api/register/dns", strings.NewReader(reqBody))
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "failed to create request: "+err.Error())
 	}
 
 	if err := tx.Commit(); err != nil {
@@ -270,6 +278,27 @@ func registerHandler(c echo.Context) error {
 	}
 
 	return c.JSON(http.StatusCreated, user)
+}
+
+// DNSを更新するAPI
+// POST /api/register/dns
+func dnsRegisterHandler(c echo.Context) error {
+	body := c.Request().Body
+	defer c.Request().Body.Close()
+
+	req := struct {
+		Name    string `json:"name"`
+		Address string `json:"address"`
+	}{}
+	if err := json.NewDecoder(body).Decode(&req); err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "failed to decode the request body as json")
+	}
+
+	if out, err := exec.Command("pdnsutil", "add-record", "u.isucon.dev", req.Name, "A", "0", req.Address).CombinedOutput(); err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, string(out)+": "+err.Error())
+	}
+
+	return c.NoContent(http.StatusOK)
 }
 
 // ユーザログインAPI
