@@ -274,9 +274,18 @@ func registerHandler(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to marshal request body: "+err.Error())
 	}
 	println("request", string(reqBody), "to", dnsServerHost+"/api/register/dns")
-	_, err = http.NewRequest(http.MethodPost, dnsServerHost+"/api/register/dns", strings.NewReader(string(reqBody)))
+	dnsReq, err := http.NewRequest(http.MethodPost, dnsServerHost+"/api/register/dns", strings.NewReader(string(reqBody)))
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to create request: "+err.Error())
+	}
+	dnsReq.Header.Set("Content-Type", "application/json")
+	dnsReq.Header.Set("Accept", "application/json")
+	dnsRes, err := http.DefaultClient.Do(dnsReq)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "failed to request to dns server: "+err.Error())
+	}
+	if dnsRes.StatusCode != http.StatusOK {
+		return echo.NewHTTPError(http.StatusInternalServerError, "failed to request to dns server: "+dnsRes.Status)
 	}
 
 	if err := tx.Commit(); err != nil {
