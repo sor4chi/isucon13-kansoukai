@@ -57,3 +57,9 @@ app-deploy:
 	echo "app deploy"
 	cd $(APP) && go build -o $(APP_BINARY) *.go
 	sudo systemctl restart $(SERVICE)
+
+.PHONY: link
+link:
+	echo "link"
+	rm -f /home/isucon/env.sh
+	sudo ln $(SERVER)/env.sh /home/isucon/env.sh
