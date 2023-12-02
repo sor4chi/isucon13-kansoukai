@@ -125,6 +125,8 @@ func initializeHandler(c echo.Context) error {
 		"ALTER TABLE `livestream` ADD INDEX `livestream_idx` (`user_id`)",
 		"ALTER TABLE `livecomment_reports` ADD INDEX `livestream_id_idx` (`livestream_id`)",
 		"ALTER TABLE `reactions` ADD INDEX `livestream_id_idx` (`livestream_id`, `created_at`)",
+		"ALTER TABLE `livecomments` ADD INDEX `livestream_id_idx` (`livestream_id`)",
+		"ALTER TABLE `themes` ADD INDEX `themes_idx` (`user_id`)",
 	}
 
 	wg := sync.WaitGroup{}
