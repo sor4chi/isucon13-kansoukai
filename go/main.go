@@ -150,7 +150,6 @@ func initCaches() {
 }
 
 func initializeHandler(c echo.Context) error {
-	resetSubdomains()
 	initCaches()
 
 	if out, err := exec.Command("../sql/init.sh").CombinedOutput(); err != nil {
@@ -204,12 +203,7 @@ func dropIndexHandler(c echo.Context) error {
 }
 
 func dnsInitializeHandler(c echo.Context) error {
-	_, err := exec.Command("../pdns/init_zone.sh").CombinedOutput()
-	if err != nil {
-		c.Logger().Warnf("init_zone.sh failed with err=%s", err.Error())
-		return echo.NewHTTPError(http.StatusInternalServerError, "failed to initialize: "+err.Error())
-	}
-
+	resetSubdomains()
 	return c.NoContent(http.StatusOK)
 }
 
@@ -226,6 +220,7 @@ func main() {
 
 	// 初期化
 	e.POST("/api/initialize", initializeHandler)
+	e.POST("/api/initialize/dns", dnsInitializeHandler)
 	e.POST("/api/drop-index", dropIndexHandler)
 
 	// top
