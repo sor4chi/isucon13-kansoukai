@@ -115,7 +115,7 @@ func initializeHandler(c echo.Context) error {
 	}
 
 	idxqs := []string{
-		"ALTER TABLE `livestream_tags` ADD INDEX `livestream_tags_idx` (`livestream_id`)",
+		"ALTER TABLE `livestream_tags` ADD INDEX `livestream_tags_idx` (`tag_id`, `livestream_id`)",
 	}
 
 	wg := sync.WaitGroup{}
