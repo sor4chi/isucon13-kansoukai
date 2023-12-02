@@ -273,6 +273,7 @@ func registerHandler(c echo.Context) error {
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to marshal request body: "+err.Error())
 	}
+	println("request", string(reqBody), "to", dnsServerHost+"/api/register/dns")
 	_, err = http.NewRequest(http.MethodPost, dnsServerHost+"/api/register/dns", strings.NewReader(string(reqBody)))
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to create request: "+err.Error())
