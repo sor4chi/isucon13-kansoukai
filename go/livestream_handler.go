@@ -215,13 +215,9 @@ func searchLivestreamsHandler(c echo.Context) error {
 		}
 	}
 
-	livestreams := make([]Livestream, len(livestreamModels))
-	for i := range livestreamModels {
-		livestream, err := fillLivestreamResponse(ctx, dbConn, *livestreamModels[i])
-		if err != nil {
-			return echo.NewHTTPError(http.StatusInternalServerError, "failed to fill livestream: "+err.Error())
-		}
-		livestreams[i] = livestream
+	livestreams, err := fillLivestreamResponseBulk(ctx, dbConn, livestreamModels)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "failed to fill livestream: "+err.Error())
 	}
 
 	return c.JSON(http.StatusOK, livestreams)
@@ -242,13 +238,9 @@ func getMyLivestreamsHandler(c echo.Context) error {
 	if err := dbConn.SelectContext(ctx, &livestreamModels, "SELECT * FROM livestreams WHERE user_id = ?", userID); err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to get livestreams: "+err.Error())
 	}
-	livestreams := make([]Livestream, len(livestreamModels))
-	for i := range livestreamModels {
-		livestream, err := fillLivestreamResponse(ctx, dbConn, *livestreamModels[i])
-		if err != nil {
-			return echo.NewHTTPError(http.StatusInternalServerError, "failed to fill livestream: "+err.Error())
-		}
-		livestreams[i] = livestream
+	livestreams, err := fillLivestreamResponseBulk(ctx, dbConn, livestreamModels)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "failed to fill livestream: "+err.Error())
 	}
 
 	return c.JSON(http.StatusOK, livestreams)
@@ -275,13 +267,10 @@ func getUserLivestreamsHandler(c echo.Context) error {
 	if err := dbConn.SelectContext(ctx, &livestreamModels, "SELECT * FROM livestreams WHERE user_id = ?", user.ID); err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to get livestreams: "+err.Error())
 	}
-	livestreams := make([]Livestream, len(livestreamModels))
-	for i := range livestreamModels {
-		livestream, err := fillLivestreamResponse(ctx, dbConn, *livestreamModels[i])
-		if err != nil {
-			return echo.NewHTTPError(http.StatusInternalServerError, "failed to fill livestream: "+err.Error())
-		}
-		livestreams[i] = livestream
+
+	livestreams, err := fillLivestreamResponseBulk(ctx, dbConn, livestreamModels)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "failed to fill livestream: "+err.Error())
 	}
 
 	return c.JSON(http.StatusOK, livestreams)
@@ -474,4 +463,63 @@ func fillLivestreamResponse(ctx context.Context, db *sqlx.DB, livestreamModel Li
 		EndAt:        livestreamModel.EndAt,
 	}
 	return livestream, nil
+}
+
+func fillLivestreamResponseBulk(ctx context.Context, db *sqlx.DB, livestreamModels []*LivestreamModel) ([]Livestream, error) {
+	livestreams := make([]Livestream, len(livestreamModels))
+	var gErr error
+
+	for i := range livestreamModels {
+		livestreamModel := livestreamModels[i]
+		ownerModel := UserModel{}
+		if err := db.GetContext(ctx, &ownerModel, "SELECT * FROM users WHERE id = ?", livestreamModel.UserID); err != nil {
+			gErr = err
+			break
+		}
+		owner, err := fillUserResponse(ctx, db, ownerModel)
+		if err != nil {
+			gErr = err
+			break
+		}
+
+		var livestreamTagModels []*LivestreamTagModel
+		if err := db.SelectContext(ctx, &livestreamTagModels, "SELECT * FROM livestream_tags WHERE livestream_id = ?", livestreamModel.ID); err != nil {
+			gErr = err
+			break
+		}
+
+		tags := make([]Tag, len(livestreamTagModels))
+		for i := range livestreamTagModels {
+			tagModel := TagModel{}
+			if err := db.GetContext(ctx, &tagModel, "SELECT * FROM tags WHERE id = ?", livestreamTagModels[i].TagID); err != nil {
+				gErr = err
+				break
+			}
+
+			tags[i] = Tag{
+				ID:   tagModel.ID,
+				Name: tagModel.Name,
+			}
+		}
+
+		livestream := Livestream{
+			ID:           livestreamModel.ID,
+			Owner:        owner,
+			Title:        livestreamModel.Title,
+			Tags:         tags,
+			Description:  livestreamModel.Description,
+			PlaylistUrl:  livestreamModel.PlaylistUrl,
+			ThumbnailUrl: livestreamModel.ThumbnailUrl,
+			StartAt:      livestreamModel.StartAt,
+			EndAt:        livestreamModel.EndAt,
+		}
+
+		livestreams[i] = livestream
+	}
+
+	if gErr != nil {
+		return nil, gErr
+	}
+
+	return livestreams, nil
 }
