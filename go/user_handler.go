@@ -286,6 +286,8 @@ func dnsRegisterHandler(c echo.Context) error {
 	body := c.Request().Body
 	defer c.Request().Body.Close()
 
+	println("dnsRegisterHandler", c.Request().Body)
+
 	req := struct {
 		Name    string `json:"name"`
 		Address string `json:"address"`
