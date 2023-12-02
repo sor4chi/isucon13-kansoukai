@@ -90,14 +90,8 @@ func getIconHandler(c echo.Context) error {
 
 	username := c.Param("username")
 
-	tx, err := dbConn.BeginTxx(ctx, nil)
-	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, "failed to begin transaction: "+err.Error())
-	}
-	defer tx.Rollback()
-
 	var user UserModel
-	if err := tx.GetContext(ctx, &user, "SELECT * FROM users WHERE name = ?", username); err != nil {
+	if err := dbConn.GetContext(ctx, &user, "SELECT * FROM users WHERE name = ?", username); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return echo.NewHTTPError(http.StatusNotFound, "not found user that has the given username")
 		}
@@ -105,7 +99,7 @@ func getIconHandler(c echo.Context) error {
 	}
 
 	var image []byte
-	if err := tx.GetContext(ctx, &image, "SELECT image FROM icons WHERE user_id = ?", user.ID); err != nil {
+	if err := dbConn.GetContext(ctx, &image, "SELECT image FROM icons WHERE user_id = ?", user.ID); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return c.File(fallbackImage)
 		} else {
