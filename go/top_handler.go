@@ -1,8 +1,6 @@
 package main
 
 import (
-	"database/sql"
-	"errors"
 	"net/http"
 
 	"github.com/labstack/echo/v4"
@@ -49,13 +47,9 @@ func getStreamerThemeHandler(c echo.Context) error {
 
 	username := c.Param("username")
 
-	userModel := UserModel{}
-	err := dbConn.GetContext(ctx, &userModel, "SELECT id FROM users WHERE name = ?", username)
-	if errors.Is(err, sql.ErrNoRows) {
+	userModel, ok := userModelByNameCache.Get(username)
+	if !ok {
 		return echo.NewHTTPError(http.StatusNotFound, "not found user that has the given username")
-	}
-	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, "failed to get user: "+err.Error())
 	}
 
 	var theme Theme

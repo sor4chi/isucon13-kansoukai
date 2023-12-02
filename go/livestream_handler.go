@@ -273,13 +273,9 @@ func getUserLivestreamsHandler(c echo.Context) error {
 
 	username := c.Param("username")
 
-	var user UserModel
-	if err := dbConn.GetContext(ctx, &user, "SELECT * FROM users WHERE name = ?", username); err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return echo.NewHTTPError(http.StatusNotFound, "user not found")
-		} else {
-			return echo.NewHTTPError(http.StatusInternalServerError, "failed to get user: "+err.Error())
-		}
+	user, ok := userModelByNameCache.Get(username)
+	if !ok {
+		return echo.NewHTTPError(http.StatusNotFound, "user not found")
 	}
 
 	var livestreamModels []*LivestreamModel
@@ -419,9 +415,9 @@ func getLivecommentReportsHandler(c echo.Context) error {
 }
 
 func fillLivestreamResponse(ctx context.Context, db *sqlx.DB, livestreamModel LivestreamModel) (Livestream, error) {
-	ownerModel := UserModel{}
-	if err := db.GetContext(ctx, &ownerModel, "SELECT * FROM users WHERE id = ?", livestreamModel.UserID); err != nil {
-		return Livestream{}, err
+	ownerModel, ok := userModelByIdCache.Get(livestreamModel.UserID)
+	if !ok {
+		return Livestream{}, fmt.Errorf("failed to get user model by id: %d", livestreamModel.UserID)
 	}
 	owner, err := fillUserResponse(ctx, db, ownerModel)
 	if err != nil {
@@ -473,20 +469,16 @@ func fillLivestreamResponseBulk(ctx context.Context, db *sqlx.DB, livestreamMode
 	livestreams := make([]Livestream, len(livestreamModels))
 	var gErr error
 
-	userIDs := make([]int64, len(livestreamModels))
+	var ownerModels []UserModel
 	livestreamIDs := make([]int64, len(livestreamModels))
 	for i := range livestreamModels {
-		userIDs[i] = livestreamModels[i].UserID
-		livestreamIDs[i] = livestreamModels[i].ID
-	}
+		userModel, ok := userModelByIdCache.Get(livestreamModels[i].UserID)
+		if !ok {
+			return nil, fmt.Errorf("failed to get user model by id: %d", livestreamModels[i].UserID)
+		}
+		ownerModels = append(ownerModels, userModel)
 
-	var ownerModels []UserModel
-	query, params, err := sqlx.In("SELECT * FROM users WHERE id IN (?)", userIDs)
-	if err != nil {
-		return nil, err
-	}
-	if err := db.SelectContext(ctx, &ownerModels, query, params...); err != nil {
-		return nil, err
+		livestreamIDs[i] = livestreamModels[i].ID
 	}
 
 	owners, err := fillUserResponseBulk(ctx, db, ownerModels)
@@ -500,7 +492,7 @@ func fillLivestreamResponseBulk(ctx context.Context, db *sqlx.DB, livestreamMode
 	}
 
 	var allLivestreamTagModels []*LivestreamTagModel
-	query, params, err = sqlx.In("SELECT * FROM livestream_tags WHERE livestream_id IN (?)", livestreamIDs)
+	query, params, err := sqlx.In("SELECT * FROM livestream_tags WHERE livestream_id IN (?)", livestreamIDs)
 	if err != nil {
 		return nil, err
 	}

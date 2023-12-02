@@ -362,9 +362,9 @@ func moderateHandler(c echo.Context) error {
 }
 
 func fillLivecommentResponse(ctx context.Context, db *sqlx.DB, livecommentModel LivecommentModel) (Livecomment, error) {
-	commentOwnerModel := UserModel{}
-	if err := db.GetContext(ctx, &commentOwnerModel, "SELECT * FROM users WHERE id = ?", livecommentModel.UserID); err != nil {
-		return Livecomment{}, err
+	commentOwnerModel, ok := userModelByIdCache.Get(livecommentModel.UserID)
+	if !ok {
+		return Livecomment{}, fmt.Errorf("failed to get user model by id: %d", livecommentModel.UserID)
 	}
 	commentOwner, err := fillUserResponse(ctx, db, commentOwnerModel)
 	if err != nil {
@@ -399,23 +399,14 @@ func fillLivecommentResponseBulk(ctx context.Context, db *sqlx.DB, livecommentMo
 
 	livestreamIDs := make([]int64, len(livecommentModels))
 
-	userIds := make([]int64, len(livecommentModels))
+	var userModels []UserModel
 
 	for i := range livecommentModels {
-		userIds[i] = livecommentModels[i].UserID
-	}
-
-	userModels := []UserModel{}
-	query, args, err := sqlx.In("SELECT * FROM users WHERE id IN (?)", userIds)
-	if err != nil {
-		return []Livecomment{}, err
-	}
-	query = db.Rebind(query)
-	if err := db.SelectContext(ctx, &userModels, query, args...); err != nil {
-		return []Livecomment{}, err
-	}
-
-	for i := range livecommentModels {
+		userModel, ok := userModelByIdCache.Get(livecommentModels[i].UserID)
+		if !ok {
+			return []Livecomment{}, fmt.Errorf("failed to get user model by id: %d", livecommentModels[i].UserID)
+		}
+		userModels = append(userModels, userModel)
 		livestreamIDs[i] = livecommentModels[i].LivestreamID
 	}
 
@@ -430,7 +421,7 @@ func fillLivecommentResponseBulk(ctx context.Context, db *sqlx.DB, livecommentMo
 	}
 
 	livestreamModels := []*LivestreamModel{}
-	query, args, err = sqlx.In("SELECT * FROM livestreams WHERE id IN (?)", livestreamIDs)
+	query, args, err := sqlx.In("SELECT * FROM livestreams WHERE id IN (?)", livestreamIDs)
 	if err != nil {
 		return []Livecomment{}, err
 	}
@@ -464,9 +455,9 @@ func fillLivecommentResponseBulk(ctx context.Context, db *sqlx.DB, livecommentMo
 }
 
 func fillLivecommentReportResponse(ctx context.Context, db *sqlx.DB, reportModel LivecommentReportModel) (LivecommentReport, error) {
-	reporterModel := UserModel{}
-	if err := db.GetContext(ctx, &reporterModel, "SELECT * FROM users WHERE id = ?", reportModel.UserID); err != nil {
-		return LivecommentReport{}, err
+	reporterModel, ok := userModelByIdCache.Get(reportModel.UserID)
+	if !ok {
+		return LivecommentReport{}, fmt.Errorf("failed to get user model by id: %d", reportModel.UserID)
 	}
 	reporter, err := fillUserResponse(ctx, db, reporterModel)
 	if err != nil {
@@ -496,26 +487,20 @@ func fillLivecommentReportResponseBulk(ctx context.Context, db *sqlx.DB, reportM
 		return []LivecommentReport{}, nil
 	}
 
-	userIDs := make([]int64, len(reportModels))
+	var userModels []UserModel
 	livecommentIDs := make([]int64, len(reportModels))
 
 	for i := range reportModels {
-		userIDs[i] = reportModels[i].UserID
+		userModel, ok := userModelByIdCache.Get(reportModels[i].UserID)
+		if !ok {
+			return []LivecommentReport{}, fmt.Errorf("failed to get user model by id: %d", reportModels[i].UserID)
+		}
+		userModels = append(userModels, userModel)
 		livecommentIDs[i] = reportModels[i].LivecommentID
 	}
 
-	userModels := []UserModel{}
-	query, args, err := sqlx.In("SELECT * FROM users WHERE id IN (?)", userIDs)
-	if err != nil {
-		return []LivecommentReport{}, err
-	}
-	query = db.Rebind(query)
-	if err := db.SelectContext(ctx, &userModels, query, args...); err != nil {
-		return []LivecommentReport{}, err
-	}
-
 	livecommentModels := []LivecommentModel{}
-	query, args, err = sqlx.In("SELECT * FROM livecomments WHERE id IN (?)", livecommentIDs)
+	query, args, err := sqlx.In("SELECT * FROM livecomments WHERE id IN (?)", livecommentIDs)
 	if err != nil {
 		return []LivecommentReport{}, err
 	}

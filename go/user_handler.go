@@ -98,12 +98,9 @@ func getIconHandler(c echo.Context) error {
 		}
 	}
 
-	var user UserModel
-	if err := dbConn.GetContext(ctx, &user, "SELECT * FROM users WHERE name = ?", username); err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return echo.NewHTTPError(http.StatusNotFound, "not found user that has the given username")
-		}
-		return echo.NewHTTPError(http.StatusInternalServerError, "failed to get user: "+err.Error())
+	user, ok := userModelByNameCache.Get(username)
+	if !ok {
+		return echo.NewHTTPError(http.StatusNotFound, "not found user that has the given username")
 	}
 
 	var image []byte
@@ -155,9 +152,9 @@ func postIconHandler(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to commit: "+err.Error())
 	}
 
-	var user UserModel
-	if err := dbConn.GetContext(ctx, &user, "SELECT * FROM users WHERE id = ?", userID); err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, "failed to get user: "+err.Error())
+	user, ok := userModelByIdCache.Get(userID)
+	if !ok {
+		return echo.NewHTTPError(http.StatusNotFound, "not found user that has the given userid")
 	}
 
 	hashCache.Delete(user.Name)
@@ -185,13 +182,9 @@ func getMeHandler(c echo.Context) error {
 	// existence already checked
 	userID := sess.Values[defaultUserIDKey].(int64)
 
-	userModel := UserModel{}
-	err := dbConn.GetContext(ctx, &userModel, "SELECT * FROM users WHERE id = ?", userID)
-	if errors.Is(err, sql.ErrNoRows) {
+	userModel, ok := userModelByIdCache.Get(userID)
+	if !ok {
 		return echo.NewHTTPError(http.StatusNotFound, "not found user that has the userid in session")
-	}
-	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, "failed to get user: "+err.Error())
 	}
 
 	user, err := fillUserResponse(ctx, dbConn, userModel)
@@ -244,6 +237,9 @@ func registerHandler(c echo.Context) error {
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to get last inserted user id: "+err.Error())
 	}
+	userModel.ID = userID
+	userModelByIdCache.Set(userModel.ID, userModel)
+	userModelByNameCache.Set(userModel.Name, userModel)
 
 	userModel.ID = userID
 
@@ -273,7 +269,6 @@ func registerHandler(c echo.Context) error {
 // ユーザログインAPI
 // POST /api/login
 func loginHandler(c echo.Context) error {
-	ctx := c.Request().Context()
 	defer c.Request().Body.Close()
 
 	req := LoginRequest{}
@@ -281,17 +276,13 @@ func loginHandler(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, "failed to decode the request body as json")
 	}
 
-	userModel := UserModel{}
 	// usernameはUNIQUEなので、whereで一意に特定できる
-	err := dbConn.GetContext(ctx, &userModel, "SELECT * FROM users WHERE name = ?", req.Username)
-	if errors.Is(err, sql.ErrNoRows) {
+	userModel, ok := userModelByNameCache.Get(req.Username)
+	if !ok {
 		return echo.NewHTTPError(http.StatusUnauthorized, "invalid username or password")
 	}
-	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, "failed to get user: "+err.Error())
-	}
 
-	err = bcrypt.CompareHashAndPassword([]byte(userModel.HashedPassword), []byte(req.Password))
+	err := bcrypt.CompareHashAndPassword([]byte(userModel.HashedPassword), []byte(req.Password))
 	if err == bcrypt.ErrMismatchedHashAndPassword {
 		return echo.NewHTTPError(http.StatusUnauthorized, "invalid username or password")
 	}
@@ -336,12 +327,9 @@ func getUserHandler(c echo.Context) error {
 
 	username := c.Param("username")
 
-	userModel := UserModel{}
-	if err := dbConn.GetContext(ctx, &userModel, "SELECT * FROM users WHERE name = ?", username); err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return echo.NewHTTPError(http.StatusNotFound, "not found user that has the given username")
-		}
-		return echo.NewHTTPError(http.StatusInternalServerError, "failed to get user: "+err.Error())
+	userModel, ok := userModelByNameCache.Get(username)
+	if !ok {
+		return echo.NewHTTPError(http.StatusNotFound, "not found user that has the given username")
 	}
 
 	user, err := fillUserResponse(ctx, dbConn, userModel)

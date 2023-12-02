@@ -72,13 +72,9 @@ func getUserStatisticsHandler(c echo.Context) error {
 	// ユーザごとに、紐づく配信について、累計リアクション数、累計ライブコメント数、累計売上金額を算出
 	// また、現在の合計視聴者数もだす
 
-	var user UserModel
-	if err := dbConn.GetContext(ctx, &user, "SELECT * FROM users WHERE name = ?", username); err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return echo.NewHTTPError(http.StatusBadRequest, "not found user that has the given username")
-		} else {
-			return echo.NewHTTPError(http.StatusInternalServerError, "failed to get user: "+err.Error())
-		}
+	user, ok := userModelByNameCache.Get(username)
+	if !ok {
+		return echo.NewHTTPError(http.StatusBadRequest, "not found user that has the given username")
 	}
 
 	var ranking UserRanking

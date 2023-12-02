@@ -118,9 +118,9 @@ func postReactionHandler(c echo.Context) error {
 }
 
 func fillReactionResponse(ctx context.Context, db *sqlx.DB, reactionModel ReactionModel) (Reaction, error) {
-	userModel := UserModel{}
-	if err := db.GetContext(ctx, &userModel, "SELECT * FROM users WHERE id = ?", reactionModel.UserID); err != nil {
-		return Reaction{}, err
+	userModel, ok := userModelByIdCache.Get(reactionModel.UserID)
+	if !ok {
+		return Reaction{}, fmt.Errorf("failed to get user model by id: %d", reactionModel.UserID)
 	}
 	user, err := fillUserResponse(ctx, db, userModel)
 	if err != nil {
@@ -151,21 +151,15 @@ func fillReactionResponseBulk(ctx context.Context, db *sqlx.DB, reactionModels [
 	if len(reactionModels) == 0 {
 		return []Reaction{}, nil
 	}
-	userIDs := make([]int64, len(reactionModels))
+	var userModels []UserModel
 	livestreamIDs := make([]int64, len(reactionModels))
 	for i := range reactionModels {
-		userIDs[i] = reactionModels[i].UserID
+		userModel, ok := userModelByIdCache.Get(reactionModels[i].UserID)
+		if !ok {
+			return nil, fmt.Errorf("failed to get user model by id: %d", reactionModels[i].UserID)
+		}
+		userModels = append(userModels, userModel)
 		livestreamIDs[i] = reactionModels[i].LivestreamID
-	}
-
-	userModels := []UserModel{}
-	query, args, err := sqlx.In("SELECT * FROM users WHERE id IN (?)", userIDs)
-	if err != nil {
-		return nil, err
-	}
-	query = db.Rebind(query)
-	if err := db.SelectContext(ctx, &userModels, query, args...); err != nil {
-		return nil, err
 	}
 
 	users, err := fillUserResponseBulk(ctx, db, userModels)
@@ -179,7 +173,7 @@ func fillReactionResponseBulk(ctx context.Context, db *sqlx.DB, reactionModels [
 	}
 
 	livestreamModels := []*LivestreamModel{}
-	query, args, err = sqlx.In("SELECT * FROM livestreams WHERE id IN (?)", livestreamIDs)
+	query, args, err := sqlx.In("SELECT * FROM livestreams WHERE id IN (?)", livestreamIDs)
 	if err != nil {
 		return nil, err
 	}

@@ -36,9 +36,11 @@ var (
 )
 
 var (
-	hashCache     = NewCache[string, [32]byte]()
-	themeCache    = NewCache[string, Theme]()
-	tagModelCache = NewCache[int64, TagModel]()
+	hashCache      = NewCache[string, [32]byte]()
+	themeCache     = NewCache[string, Theme]()
+	tagModelCache  = NewCache[int64, TagModel]()
+	userModelByIdCache = NewCache[int64, UserModel]()
+	userModelByNameCache = NewCache[string, UserModel]()
 )
 
 func init() {
@@ -149,6 +151,8 @@ func initCaches() {
 	hashCache.Init()
 	themeCache.Init()
 	tagModelCache.Init()
+	userModelByIdCache.Init()
+	userModelByNameCache.Init()
 }
 
 func initializeHandler(c echo.Context) error {
@@ -178,6 +182,15 @@ func initializeHandler(c echo.Context) error {
 	}
 	for _, tag := range tags {
 		tagModelCache.Set(tag.ID, tag)
+	}
+
+	var users []UserModel
+	if err := dbConn.Select(&users, "SELECT * FROM users"); err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "failed to get users: "+err.Error())
+	}
+	for _, user := range users {
+		userModelByIdCache.Set(user.ID, user)
+		userModelByNameCache.Set(user.Name, user)
 	}
 
 	c.Request().Header.Add("Content-Type", "application/json;charset=utf-8")
