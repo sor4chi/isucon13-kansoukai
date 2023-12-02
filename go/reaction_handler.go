@@ -166,13 +166,15 @@ func fillReactionResponseBulk(ctx context.Context, db *sqlx.DB, reactionModels [
 	if err := db.SelectContext(ctx, &userModels, query, args...); err != nil {
 		return nil, err
 	}
-	users := make(map[int64]User, len(userModels))
-	for i := range userModels {
-		user, err := fillUserResponse(ctx, db, userModels[i])
-		if err != nil {
-			return nil, err
-		}
-		users[userModels[i].ID] = user
+
+	users, err := fillUserResponseBulk(ctx, db, userModels)
+	if err != nil {
+		return nil, err
+	}
+
+	usersMap := make(map[int64]User, len(users))
+	for i := range users {
+		usersMap[users[i].ID] = users[i]
 	}
 
 	livestreamModels := []*LivestreamModel{}
@@ -199,7 +201,7 @@ func fillReactionResponseBulk(ctx context.Context, db *sqlx.DB, reactionModels [
 		reaction := Reaction{
 			ID:         reactionModels[i].ID,
 			EmojiName:  reactionModels[i].EmojiName,
-			User:       users[reactionModels[i].UserID],
+			User:       usersMap[reactionModels[i].UserID],
 			Livestream: livestreamsMap[reactionModels[i].LivestreamID],
 			CreatedAt:  reactionModels[i].CreatedAt,
 		}

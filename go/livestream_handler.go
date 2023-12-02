@@ -480,7 +480,7 @@ func fillLivestreamResponseBulk(ctx context.Context, db *sqlx.DB, livestreamMode
 		livestreamIDs[i] = livestreamModels[i].ID
 	}
 
-	var ownerModels []*UserModel
+	var ownerModels []UserModel
 	query, params, err := sqlx.In("SELECT * FROM users WHERE id IN (?)", userIDs)
 	if err != nil {
 		return nil, err
@@ -489,13 +489,14 @@ func fillLivestreamResponseBulk(ctx context.Context, db *sqlx.DB, livestreamMode
 		return nil, err
 	}
 
-	owners := make(map[int64]User, len(ownerModels))
-	for i := range ownerModels {
-		owner, err := fillUserResponse(ctx, db, *ownerModels[i])
-		if err != nil {
-			return nil, err
-		}
-		owners[owner.ID] = owner
+	owners, err := fillUserResponseBulk(ctx, db, ownerModels)
+	if err != nil {
+		return nil, err
+	}
+
+	ownersMap := make(map[int64]User, len(owners))
+	for i := range owners {
+		ownersMap[owners[i].ID] = owners[i]
 	}
 
 	var allLivestreamTagModels []*LivestreamTagModel
@@ -542,7 +543,7 @@ func fillLivestreamResponseBulk(ctx context.Context, db *sqlx.DB, livestreamMode
 
 	for i := range livestreamModels {
 		livestreamModel := livestreamModels[i]
-		owner, ok := owners[livestreamModel.UserID]
+		owner, ok := ownersMap[livestreamModel.UserID]
 		if !ok {
 			gErr = fmt.Errorf("failed to get owner of livestream: %d", livestreamModel.UserID)
 			break

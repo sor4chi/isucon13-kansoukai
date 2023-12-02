@@ -432,3 +432,62 @@ func fillUserResponse(ctx context.Context, db *sqlx.DB, userModel UserModel) (Us
 
 	return user, nil
 }
+
+func fillUserResponseBulk(ctx context.Context, db *sqlx.DB, userModels []UserModel) ([]User, error) {
+	users := make([]User, 0, len(userModels))
+
+	var gErr error
+	for _, userModel := range userModels {
+		var theme Theme
+		if v, ok := themeCache.Get(userModel.Name); ok {
+			theme = v
+		} else {
+			themeModel := ThemeModel{}
+			if err := db.GetContext(ctx, &themeModel, "SELECT * FROM themes WHERE user_id = ?", userModel.ID); err != nil {
+				gErr = err
+				break
+			}
+			theme = Theme{
+				ID:       themeModel.ID,
+				DarkMode: themeModel.DarkMode,
+			}
+		}
+
+		var iconHash [32]byte
+		if v, ok := hashCache.Get(userModel.Name); ok {
+			iconHash = v
+		} else {
+			var image []byte
+			if err := db.GetContext(ctx, &image, "SELECT image FROM icons WHERE user_id = ?", userModel.ID); err != nil {
+				if !errors.Is(err, sql.ErrNoRows) {
+					gErr = err
+					break
+				}
+				image, err = os.ReadFile(fallbackImage)
+				if err != nil {
+					gErr = err
+					break
+				}
+			}
+			iconHash = sha256.Sum256(image)
+			hashCache.Set(userModel.Name, iconHash)
+		}
+
+		user := User{
+			ID:          userModel.ID,
+			Name:        userModel.Name,
+			DisplayName: userModel.DisplayName,
+			Description: userModel.Description,
+			Theme:       theme,
+			IconHash:    fmt.Sprintf("%x", iconHash),
+		}
+
+		users = append(users, user)
+	}
+
+	if gErr != nil {
+		return nil, gErr
+	}
+
+	return users, nil
+}
