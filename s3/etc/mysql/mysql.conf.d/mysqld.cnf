@@ -76,3 +76,13 @@ log_error = /var/log/mysql/error.log
 max_binlog_size   = 100M
 # binlog_do_db		= include_database_name
 # binlog_ignore_db	= include_database_name
+
+skip-log-bin
+skip-innodb-doublewrite
+innodb_flush_log_at_trx_commit=0
+
+innodb_buffer_pool_size=3000MB
+innodb_buffer_pool_instances=2
+innodb_log_file_size=750MB
+innodb_log_buffer_size=20MB
+innodb_log_writer_threads=OFF
