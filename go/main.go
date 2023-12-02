@@ -35,7 +35,8 @@ var (
 )
 
 var (
-	hashCache = NewCache[string, [32]byte]()
+	hashCache  = NewCache[string, [32]byte]()
+	themeCache = NewCache[string, Theme]()
 )
 
 func init() {
@@ -145,6 +146,7 @@ func createIndexQueries() []string {
 
 func initCaches() {
 	hashCache.Init()
+	themeCache.Init()
 }
 
 func initializeHandler(c echo.Context) error {

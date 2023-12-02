@@ -253,6 +253,7 @@ func registerHandler(c echo.Context) error {
 	if _, err := tx.NamedExecContext(ctx, "INSERT INTO themes (user_id, dark_mode) VALUES(:user_id, :dark_mode)", themeModel); err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to insert user theme: "+err.Error())
 	}
+	themeCache.Delete(req.Name)
 
 	if out, err := exec.Command("pdnsutil", "add-record", "u.isucon.dev", req.Name, "A", "0", powerDNSSubdomainAddress).CombinedOutput(); err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, string(out)+": "+err.Error())
@@ -387,9 +388,18 @@ func verifyUserSession(c echo.Context) error {
 }
 
 func fillUserResponse(ctx context.Context, db *sqlx.DB, userModel UserModel) (User, error) {
-	themeModel := ThemeModel{}
-	if err := db.GetContext(ctx, &themeModel, "SELECT * FROM themes WHERE user_id = ?", userModel.ID); err != nil {
-		return User{}, err
+	var theme Theme
+	if v, ok := themeCache.Get(userModel.Name); ok {
+		theme = v
+	} else {
+		themeModel := ThemeModel{}
+		if err := db.GetContext(ctx, &themeModel, "SELECT * FROM themes WHERE user_id = ?", userModel.ID); err != nil {
+			return User{}, err
+		}
+		theme = Theme{
+			ID:       themeModel.ID,
+			DarkMode: themeModel.DarkMode,
+		}
 	}
 
 	var iconHash [32]byte
@@ -416,11 +426,8 @@ func fillUserResponse(ctx context.Context, db *sqlx.DB, userModel UserModel) (Us
 		Name:        userModel.Name,
 		DisplayName: userModel.DisplayName,
 		Description: userModel.Description,
-		Theme: Theme{
-			ID:       themeModel.ID,
-			DarkMode: themeModel.DarkMode,
-		},
-		IconHash: fmt.Sprintf("%x", iconHash),
+		Theme:       theme,
+		IconHash:    fmt.Sprintf("%x", iconHash),
 	}
 
 	return user, nil

@@ -80,18 +80,25 @@ func getStreamerThemeHandler(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to get user: "+err.Error())
 	}
 
-	themeModel := ThemeModel{}
-	if err := tx.GetContext(ctx, &themeModel, "SELECT * FROM themes WHERE user_id = ?", userModel.ID); err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, "failed to get user theme: "+err.Error())
-	}
+	var theme Theme
+	if v, ok := themeCache.Get(username); ok {
+		theme = v
+	} else {
+		themeModel := ThemeModel{}
+		if err := tx.GetContext(ctx, &themeModel, "SELECT * FROM themes WHERE user_id = ?", userModel.ID); err != nil {
+			return echo.NewHTTPError(http.StatusInternalServerError, "failed to get user theme: "+err.Error())
+		}
 
-	if err := tx.Commit(); err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, "failed to commit: "+err.Error())
-	}
+		if err := tx.Commit(); err != nil {
+			return echo.NewHTTPError(http.StatusInternalServerError, "failed to commit: "+err.Error())
+		}
 
-	theme := Theme{
-		ID:       themeModel.ID,
-		DarkMode: themeModel.DarkMode,
+		theme = Theme{
+			ID:       themeModel.ID,
+			DarkMode: themeModel.DarkMode,
+		}
+
+		themeCache.Set(username, theme)
 	}
 
 	return c.JSON(http.StatusOK, theme)
