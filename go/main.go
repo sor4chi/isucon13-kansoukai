@@ -127,7 +127,7 @@ var IDX_QUERIES = []IndexQuery{
 	{"ng_words", "livestream_viewers_middle_idx", []string{"user_id", "livestream_id"}},
 	{"ng_words", "livestream_viewers_small_idx", []string{"livestream_id"}},
 	{"reservation_slots", "reservation_slots_idx", []string{"start_at", "end_at"}},
-	{"livestream", "livestream_idx", []string{"user_id"}},
+	{"livestreams", "livestreams_idx", []string{"user_id"}},
 	{"livecomment_reports", "livestream_id_idx", []string{"livestream_id"}},
 	{"reactions", "livestream_id_idx", []string{"livestream_id", "created_at"}},
 	{"reactions", "livestream_id_short_idx", []string{"livestream_id"}},
