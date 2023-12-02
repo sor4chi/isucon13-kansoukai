@@ -186,7 +186,7 @@ func searchLivestreamsHandler(c echo.Context) error {
 	var livestreamModels []*LivestreamModel
 	if c.QueryParam("tag") != "" {
 		// タグによる取得
-		var tagIDList []int
+		var tagIDList []int64
 		if err := dbConn.SelectContext(ctx, &tagIDList, "SELECT id FROM tags WHERE name = ?", keyTagName); err != nil {
 			return echo.NewHTTPError(http.StatusInternalServerError, "failed to get tags: "+err.Error())
 		}
@@ -457,12 +457,31 @@ func fillLivestreamResponse(ctx context.Context, db *sqlx.DB, livestreamModel Li
 
 	if len(tagIDs) > 0 {
 		var tagModels []*TagModel
-		query, params, err := sqlx.In("SELECT * FROM tags WHERE id IN (?)", tagIDs)
-		if err != nil {
-			return Livestream{}, err
+		var reqTagIds []int64
+		for i := range tagIDs {
+			tagId := tagIDs[i]
+			cache, ok := tagModelCache.Get(tagId)
+			if ok {
+				tagModels = append(tagModels, &cache)
+			} else {
+				reqTagIds = append(reqTagIds, tagId)
+			}
 		}
-		if err := db.SelectContext(ctx, &tagModels, query, params...); err != nil {
-			return Livestream{}, err
+
+		if len(reqTagIds) > 0 {
+			query, params, err := sqlx.In("SELECT * FROM tags WHERE id IN (?)", tagIDs)
+			if err != nil {
+				return Livestream{}, err
+			}
+			var tmpTagModels []*TagModel
+			if err := db.SelectContext(ctx, &tmpTagModels, query, params...); err != nil {
+				return Livestream{}, err
+			}
+
+			for i := range tagModels {
+				tagModelCache.Set(tagModels[i].ID, *tagModels[i])
+				tagModels = append(tagModels, tagModels[i])
+			}
 		}
 
 		for i := range tagModels {
@@ -547,12 +566,31 @@ func fillLivestreamResponseBulk(ctx context.Context, db *sqlx.DB, livestreamMode
 	}
 
 	var allTagModels []*TagModel
-	query, params, err = sqlx.In("SELECT * FROM tags WHERE id IN (?)", tagIDs)
-	if err != nil {
-		return nil, err
+	var reqTagIds []int64
+	for i := range tagIDs {
+		tagId := tagIDs[i]
+		cache, ok := tagModelCache.Get(tagId)
+		if ok {
+			allTagModels = append(allTagModels, &cache)
+		} else {
+			reqTagIds = append(reqTagIds, tagId)
+		}
 	}
-	if err := db.SelectContext(ctx, &allTagModels, query, params...); err != nil {
-		return nil, err
+
+	if len(reqTagIds) > 0 {
+		query, params, err = sqlx.In("SELECT * FROM tags WHERE id IN (?)", tagIDs)
+		if err != nil {
+			return nil, err
+		}
+		var tmpTagModels []*TagModel
+		if err := db.SelectContext(ctx, &tmpTagModels, query, params...); err != nil {
+			return nil, err
+		}
+
+		for i := range tmpTagModels {
+			tagModelCache.Set(tmpTagModels[i].ID, *tmpTagModels[i])
+			allTagModels = append(allTagModels, tmpTagModels[i])
+		}
 	}
 
 	tagsMap := make(map[int64]Tag, len(allTagModels))
