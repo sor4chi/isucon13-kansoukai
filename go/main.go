@@ -264,7 +264,6 @@ func main() {
 
 	// user
 	e.POST("/api/register", registerHandler)
-	e.POST("/api/register/dns", dnsRegisterHandler)
 	e.POST("/api/login", loginHandler)
 	e.GET("/api/user/me", getMeHandler)
 	// フロントエンドで、配信予約のコラボレーターを指定する際に必要

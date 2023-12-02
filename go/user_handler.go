@@ -255,37 +255,7 @@ func registerHandler(c echo.Context) error {
 	}
 	themeCache.Delete(req.Name)
 
-	dnsServerHost, ok := os.LookupEnv(powerDNSServerHostEnvKey)
-	if !ok {
-		return echo.NewHTTPError(http.StatusInternalServerError, "environ "+powerDNSServerHostEnvKey+" must be provided")
-	}
-
-	// http request to dns server
-	type DnsRequest struct {
-		Name    string `json:"name"`
-		Address string `json:"address"`
-	}
-	reqBody, err := json.Marshal(DnsRequest{
-		Name:    req.Name,
-		Address: powerDNSSubdomainAddress,
-	})
-	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, "failed to marshal request body: "+err.Error())
-	}
-
-	dnsReq, err := http.NewRequest(http.MethodPost, dnsServerHost+"/api/register/dns", strings.NewReader(string(reqBody)))
-	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, "failed to create request: "+err.Error())
-	}
-	dnsReq.Header.Set("Content-Type", "application/json")
-	dnsReq.Header.Set("Accept", "application/json")
-	dnsRes, err := http.DefaultClient.Do(dnsReq)
-	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, "failed to request to dns server: "+err.Error())
-	}
-	if dnsRes.StatusCode != http.StatusOK {
-		return echo.NewHTTPError(http.StatusInternalServerError, "failed to request to dns server: "+dnsRes.Status)
-	}
+	addSubdomain(req.Name + ".u.isucon.dev.")
 
 	if err := tx.Commit(); err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to commit: "+err.Error())
@@ -297,25 +267,6 @@ func registerHandler(c echo.Context) error {
 	}
 
 	return c.JSON(http.StatusCreated, user)
-}
-
-// DNSを更新するAPI
-// POST /api/register/dns
-func dnsRegisterHandler(c echo.Context) error {
-	body := c.Request().Body
-	defer c.Request().Body.Close()
-
-	req := struct {
-		Name    string `json:"name"`
-		Address string `json:"address"`
-	}{}
-	if err := json.NewDecoder(body).Decode(&req); err != nil {
-		return echo.NewHTTPError(http.StatusBadRequest, "failed to decode the request body as json")
-	}
-
-	addSubdomain(req.Name + ".u.isucon.dev.")
-
-	return c.NoContent(http.StatusOK)
 }
 
 // ユーザログインAPI
