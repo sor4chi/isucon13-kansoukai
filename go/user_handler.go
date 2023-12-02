@@ -261,6 +261,7 @@ func registerHandler(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusInternalServerError, "environ "+powerDNSServerHostEnvKey+" must be provided")
 	}
 
+	println("dnsServerHost", req.Name, powerDNSSubdomainAddress, dnsServerHost)
 	// http request to dns server
 	reqBody := fmt.Sprintf(`{"name": "%s", "address": "%s"}`, req.Name, powerDNSSubdomainAddress)
 	_, err = http.NewRequest(http.MethodPost, dnsServerHost+"/api/register/dns", strings.NewReader(reqBody))
