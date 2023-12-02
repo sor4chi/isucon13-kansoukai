@@ -62,4 +62,5 @@ env-deploy:
 app-deploy:
 	echo "app deploy"
 	cd $(APP) && go build -o $(APP_BINARY) *.go
+	sudo setcap 'cap_net_bind_service=+ep' $(APP)/$(APP_BINARY)
 	sudo systemctl restart $(SERVICE)
