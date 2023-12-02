@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/jmoiron/sqlx"
@@ -110,15 +111,18 @@ func reserveLivestreamHandler(c echo.Context) error {
 		c.Logger().Warnf("予約枠一覧取得でエラー発生: %+v", err)
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to get reservation_slots: "+err.Error())
 	}
-	for _, slot := range slots {
-		var count int
-		if err := tx.GetContext(ctx, &count, "SELECT slot FROM reservation_slots WHERE start_at = ? AND end_at = ?", slot.StartAt, slot.EndAt); err != nil {
-			return echo.NewHTTPError(http.StatusInternalServerError, "failed to get reservation_slots: "+err.Error())
-		}
-		c.Logger().Infof("%d ~ %d予約枠の残数 = %d\n", slot.StartAt, slot.EndAt, slot.Slot)
-		if count < 1 {
-			return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("予約期間 %d ~ %dに対して、予約区間 %d ~ %dが予約できません", termStartAt.Unix(), termEndAt.Unix(), req.StartAt, req.EndAt))
-		}
+
+	conditions := make([]string, len(slots))
+	for i := range slots {
+		conditions[i] = fmt.Sprintf("(start_at = %d AND end_at = %d AND slot > 0)", slots[i].StartAt, slots[i].EndAt)
+	}
+	query := fmt.Sprintf("SELECT COUNT(*) FROM reservation_slots WHERE %s", strings.Join(conditions, " OR "))
+	var count int
+	if err := tx.GetContext(ctx, &count, query); err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "failed to get reservation_slots: "+err.Error())
+	}
+	if count < 1 {
+		return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("予約期間 %d ~ %dに対して、予約区間 %d ~ %dが予約できません", termStartAt.Unix(), termEndAt.Unix(), req.StartAt, req.EndAt))
 	}
 
 	var (
