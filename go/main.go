@@ -11,6 +11,7 @@ import (
 	"os"
 	"os/exec"
 	"strconv"
+	"sync"
 
 	"github.com/go-sql-driver/mysql"
 	"github.com/jmoiron/sqlx"
@@ -112,6 +113,22 @@ func initializeHandler(c echo.Context) error {
 		c.Logger().Warnf("init.sh failed with err=%s", string(out))
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to initialize: "+err.Error())
 	}
+
+	idxqs := []string{
+		"ALTER TABLE `livestream_tags` ADD INDEX `livestream_tags_idx` (`livestream_id`)",
+	}
+
+	wg := sync.WaitGroup{}
+	for _, qs := range idxqs {
+		wg.Add(1)
+		go func(qs string) {
+			defer wg.Done()
+			if _, err := dbConn.Exec(qs); err != nil {
+				c.Logger().Infof("[KNOWN] ALREADY EXISTS: %s", qs)
+			}
+		}(qs)
+	}
+	wg.Wait()
 
 	go func() {
 		if _, err := http.Get("http://localhost:9000/api/group/collect"); err != nil {
