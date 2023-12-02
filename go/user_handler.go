@@ -401,6 +401,7 @@ func fillUserResponse(ctx context.Context, db *sqlx.DB, userModel UserModel) (Us
 			ID:       themeModel.ID,
 			DarkMode: themeModel.DarkMode,
 		}
+		themeCache.Set(userModel.Name, theme)
 	}
 
 	var iconHash [32]byte
