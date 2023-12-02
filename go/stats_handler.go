@@ -128,9 +128,9 @@ func getUserStatisticsHandler(c echo.Context) error {
 	// ライブコメント数、チップ合計
 	var totalLivecomments int64
 	var totalTip int64
-	var livestreams []*LivestreamModel
-	if err := dbConn.SelectContext(ctx, &livestreams, "SELECT * FROM livestreams WHERE user_id = ?", user.ID); err != nil && !errors.Is(err, sql.ErrNoRows) {
-		return echo.NewHTTPError(http.StatusInternalServerError, "failed to get livestreams: "+err.Error())
+	livestreams, ok := livestreamModelByUserIDCache.Get(user.ID)
+	if !ok {
+		return echo.NewHTTPError(http.StatusInternalServerError, "failed to get livestreams")
 	}
 
 	livestreamIDs := make([]int64, len(livestreams))

@@ -42,7 +42,7 @@ var (
 	userModelByIdCache           = NewCache[int64, UserModel]()
 	userModelByNameCache         = NewCache[string, UserModel]()
 	livestreamModelByIdCache     = NewCache[int64, LivestreamModel]()
-	livestreamModelByUserIDCache = NewCache[int64, []LivestreamModel]()
+	livestreamModelByUserIDCache = NewCache[int64, []*LivestreamModel]()
 )
 
 func init() {

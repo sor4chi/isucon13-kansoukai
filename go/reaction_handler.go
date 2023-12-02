@@ -127,9 +127,9 @@ func fillReactionResponse(ctx context.Context, db *sqlx.DB, reactionModel Reacti
 		return Reaction{}, err
 	}
 
-	livestreamModel := LivestreamModel{}
-	if err := db.GetContext(ctx, &livestreamModel, "SELECT * FROM livestreams WHERE id = ?", reactionModel.LivestreamID); err != nil {
-		return Reaction{}, err
+	livestreamModel, ok := livestreamModelByIdCache.Get(reactionModel.LivestreamID)
+	if !ok {
+		return Reaction{}, fmt.Errorf("failed to get livestream model by id: %d", reactionModel.LivestreamID)
 	}
 	livestream, err := fillLivestreamResponse(ctx, db, livestreamModel)
 	if err != nil {
@@ -172,15 +172,15 @@ func fillReactionResponseBulk(ctx context.Context, db *sqlx.DB, reactionModels [
 		usersMap[users[i].ID] = users[i]
 	}
 
-	livestreamModels := []*LivestreamModel{}
-	query, args, err := sqlx.In("SELECT * FROM livestreams WHERE id IN (?)", livestreamIDs)
-	if err != nil {
-		return nil, err
+	livestreamModels := make([]*LivestreamModel, len(livestreamIDs))
+	for i := range livestreamIDs {
+		livestreamModel, ok := livestreamModelByIdCache.Get(livestreamIDs[i])
+		if !ok {
+			return nil, fmt.Errorf("failed to get livestream model by id: %d", livestreamIDs[i])
+		}
+		livestreamModels[i] = &livestreamModel
 	}
-	query = db.Rebind(query)
-	if err := db.SelectContext(ctx, &livestreamModels, query, args...); err != nil {
-		return nil, err
-	}
+
 	livestreams, err := fillLivestreamResponseBulk(ctx, db, livestreamModels)
 	if err != nil {
 		return nil, err

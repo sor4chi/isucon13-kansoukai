@@ -155,9 +155,9 @@ func reserveLivestreamHandler(c echo.Context) error {
 	livestreamModelByIdCache.Set(livestreamID, *livestreamModel)
 	livestreamModelsByUserID, ok := livestreamModelByUserIDCache.Get(livestreamModel.UserID)
 	if !ok {
-		livestreamModelsByUserID = make([]LivestreamModel, 0)
+		livestreamModelsByUserID = make([]*LivestreamModel, 0)
 	}
-	livestreamModelsByUserID = append(livestreamModelsByUserID, *livestreamModel)
+	livestreamModelsByUserID = append(livestreamModelsByUserID, livestreamModel)
 	livestreamModelByUserIDCache.Set(livestreamModel.UserID, livestreamModelsByUserID)
 
 	// タグ追加
