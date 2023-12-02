@@ -11,6 +11,7 @@ import (
 	"os"
 	"os/exec"
 	"strconv"
+	"strings"
 	"sync"
 
 	"github.com/go-sql-driver/mysql"
@@ -26,7 +27,7 @@ import (
 const (
 	listenPort                     = 8080
 	powerDNSSubdomainAddressEnvKey = "ISUCON13_POWERDNS_SUBDOMAIN_ADDRESS"
-	powerDNSServerHostEnvKey    = "ISUCON13_POWERDNS_SERVER_HOST"
+	powerDNSServerHostEnvKey       = "ISUCON13_POWERDNS_SERVER_HOST"
 )
 
 var (
@@ -156,6 +157,23 @@ func initializeHandler(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to initialize: "+err.Error())
 	}
 
+	dnsServerHost, ok := os.LookupEnv(powerDNSServerHostEnvKey)
+	if !ok {
+		return echo.NewHTTPError(http.StatusInternalServerError, "failed to initialize: "+powerDNSServerHostEnvKey+" is not set")
+	}
+
+	dnsReq, err := http.NewRequest(http.MethodPost, dnsServerHost+"/api/initialize/dns", strings.NewReader(""))
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "failed to create request: "+err.Error())
+	}
+	dnsRes, err := http.DefaultClient.Do(dnsReq)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "failed to request to dns server: "+err.Error())
+	}
+	if dnsRes.StatusCode != http.StatusOK {
+		return echo.NewHTTPError(http.StatusInternalServerError, "failed to request to dns server: "+dnsRes.Status)
+	}
+
 	wg := sync.WaitGroup{}
 	for _, qs := range createIndexQueries() {
 		wg.Add(1)
@@ -190,6 +208,16 @@ func dropIndexHandler(c echo.Context) error {
 	return c.NoContent(http.StatusOK)
 }
 
+func dnsInitializeHandler(c echo.Context) error {
+	_, err := exec.Command("../pdns/init_zone.sh").CombinedOutput()
+	if err != nil {
+		c.Logger().Warnf("init_zone.sh failed with err=%s", err.Error())
+		return echo.NewHTTPError(http.StatusInternalServerError, "failed to initialize: "+err.Error())
+	}
+
+	return c.NoContent(http.StatusOK)
+}
+
 func main() {
 	initCaches()
 
@@ -202,6 +230,7 @@ func main() {
 
 	// 初期化
 	e.POST("/api/initialize", initializeHandler)
+	e.POST("/api/initialize/dns", dnsInitializeHandler)
 	e.POST("/api/drop-index", dropIndexHandler)
 
 	// top
