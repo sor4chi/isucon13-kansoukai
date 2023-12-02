@@ -152,6 +152,13 @@ func reserveLivestreamHandler(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to get last inserted livestream id: "+err.Error())
 	}
 	livestreamModel.ID = livestreamID
+	livestreamModelByIdCache.Set(livestreamID, *livestreamModel)
+	livestreamModelsByUserID, ok := livestreamModelByUserIDCache.Get(livestreamModel.UserID)
+	if !ok {
+		livestreamModelsByUserID = make([]LivestreamModel, 0)
+	}
+	livestreamModelsByUserID = append(livestreamModelsByUserID, *livestreamModel)
+	livestreamModelByUserIDCache.Set(livestreamModel.UserID, livestreamModelsByUserID)
 
 	// タグ追加
 	livestreamTagModels := make([]*LivestreamTagModel, len(req.Tags))

@@ -36,11 +36,13 @@ var (
 )
 
 var (
-	hashCache      = NewCache[string, [32]byte]()
-	themeCache     = NewCache[string, Theme]()
-	tagModelCache  = NewCache[int64, TagModel]()
-	userModelByIdCache = NewCache[int64, UserModel]()
-	userModelByNameCache = NewCache[string, UserModel]()
+	hashCache                    = NewCache[string, [32]byte]()
+	themeCache                   = NewCache[string, Theme]()
+	tagModelCache                = NewCache[int64, TagModel]()
+	userModelByIdCache           = NewCache[int64, UserModel]()
+	userModelByNameCache         = NewCache[string, UserModel]()
+	livestreamModelByIdCache     = NewCache[int64, LivestreamModel]()
+	livestreamModelByUserIDCache = NewCache[int64, []LivestreamModel]()
 )
 
 func init() {
@@ -153,6 +155,8 @@ func initCaches() {
 	tagModelCache.Init()
 	userModelByIdCache.Init()
 	userModelByNameCache.Init()
+	livestreamModelByIdCache.Init()
+	livestreamModelByUserIDCache.Init()
 }
 
 func initializeHandler(c echo.Context) error {
