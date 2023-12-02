@@ -2,8 +2,6 @@ package main
 
 import (
 	"context"
-	"database/sql"
-	"errors"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -365,13 +363,9 @@ func getLivestreamHandler(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, "livestream_id in path must be integer")
 	}
 
-	livestreamModel := LivestreamModel{}
-	err = dbConn.GetContext(ctx, &livestreamModel, "SELECT * FROM livestreams WHERE id = ?", livestreamID)
-	if errors.Is(err, sql.ErrNoRows) {
+	livestreamModel, ok := livestreamModelByIdCache.Get(int64(livestreamID))
+	if !ok {
 		return echo.NewHTTPError(http.StatusNotFound, "not found livestream that has the given id")
-	}
-	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, "failed to get livestream: "+err.Error())
 	}
 
 	livestream, err := fillLivestreamResponse(ctx, dbConn, livestreamModel)
@@ -394,9 +388,9 @@ func getLivecommentReportsHandler(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, "livestream_id in path must be integer")
 	}
 
-	var livestreamModel LivestreamModel
-	if err := dbConn.GetContext(ctx, &livestreamModel, "SELECT * FROM livestreams WHERE id = ?", livestreamID); err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, "failed to get livestream: "+err.Error())
+	livestreamModel, ok := livestreamModelByIdCache.Get(int64(livestreamID))
+	if !ok {
+		return echo.NewHTTPError(http.StatusNotFound, "not found livestream that has the given id")
 	}
 
 	// error already check
