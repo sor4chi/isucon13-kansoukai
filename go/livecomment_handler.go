@@ -403,7 +403,7 @@ func fillLivecommentResponseBulk(ctx context.Context, db *sqlx.DB, livecommentMo
 	}
 
 	commentOwners := make([]User, len(livecommentModels))
-	livestreams := make([]Livestream, len(livecommentModels))
+	livestreamIDs := make([]int64, len(livecommentModels))
 
 	for i := range livecommentModels {
 		commentOwnerModel := UserModel{}
@@ -416,15 +416,26 @@ func fillLivecommentResponseBulk(ctx context.Context, db *sqlx.DB, livecommentMo
 		}
 		commentOwners[i] = commentOwner
 
-		livestreamModel := LivestreamModel{}
-		if err := db.GetContext(ctx, &livestreamModel, "SELECT * FROM livestreams WHERE id = ?", livecommentModels[i].LivestreamID); err != nil {
-			return []Livecomment{}, err
-		}
-		livestream, err := fillLivestreamResponse(ctx, db, livestreamModel)
-		if err != nil {
-			return []Livecomment{}, err
-		}
-		livestreams[i] = livestream
+		livestreamIDs[i] = livecommentModels[i].LivestreamID
+	}
+
+	livestreamModels := []*LivestreamModel{}
+	query, args, err := sqlx.In("SELECT * FROM livestreams WHERE id IN (?)", livestreamIDs)
+	if err != nil {
+		return []Livecomment{}, err
+	}
+	query = db.Rebind(query)
+	if err := db.SelectContext(ctx, &livestreamModels, query, args...); err != nil {
+		return []Livecomment{}, err
+	}
+	livestreams, err := fillLivestreamResponseBulk(ctx, db, livestreamModels)
+	if err != nil {
+		return []Livecomment{}, err
+	}
+
+	livestreamMap := make(map[int64]Livestream)
+	for _, livestream := range livestreams {
+		livestreamMap[livestream.ID] = livestream
 	}
 
 	livecomments := make([]Livecomment, len(livecommentModels))
@@ -432,7 +443,7 @@ func fillLivecommentResponseBulk(ctx context.Context, db *sqlx.DB, livecommentMo
 		livecomments[i] = Livecomment{
 			ID:         livecommentModels[i].ID,
 			User:       commentOwners[i],
-			Livestream: livestreams[i],
+			Livestream: livestreamMap[livecommentModels[i].LivestreamID],
 			Comment:    livecommentModels[i].Comment,
 			Tip:        livecommentModels[i].Tip,
 			CreatedAt:  livecommentModels[i].CreatedAt,
