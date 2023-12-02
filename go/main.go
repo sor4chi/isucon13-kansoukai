@@ -16,10 +16,10 @@ import (
 
 	"github.com/go-sql-driver/mysql"
 	"github.com/jmoiron/sqlx"
+
 	"github.com/labstack/echo/v4"
 
 	"github.com/gorilla/sessions"
-	"github.com/kaz/pprotein/integration/echov4"
 	"github.com/labstack/echo-contrib/session"
 	echolog "github.com/labstack/gommon/log"
 )
@@ -186,12 +186,6 @@ func initializeHandler(c echo.Context) error {
 	}
 	wg.Wait()
 
-	go func() {
-		if _, err := http.Get("http://localhost:9000/api/group/collect"); err != nil {
-			log.Printf("failed to communicate with pprotein: %v", err)
-		}
-	}()
-
 	c.Request().Header.Add("Content-Type", "application/json;charset=utf-8")
 	return c.JSON(http.StatusOK, InitializeResponse{
 		Language: "golang",
@@ -284,8 +278,6 @@ func main() {
 
 	// 課金情報
 	e.GET("/api/payment", GetPaymentResult)
-
-	echov4.EnableDebugHandler(e)
 
 	e.HTTPErrorHandler = errorResponseHandler
 
